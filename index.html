@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>跨设备书签应用</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <!-- 自定义Tailwind配置 -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            light: '#3B82F6', // 蓝色 - 明亮模式
+                            dark: '#8B5CF6',  // 紫色 - 暗黑模式
+                        },
+                        background: {
+                            light: '#FFFFFF',
+                            dark: '#1F2937',
+                        },
+                        surface: {
+                            light: '#F9FAFB',
+                            dark: '#374151',
+                        },
+                        text: {
+                            light: '#1F2937',
+                            dark: '#F9FAFB',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .bookmark-card {
+                @apply bg-surface-light dark:bg-surface-dark rounded-lg shadow-md p-4 transition-all duration-300 hover:shadow-lg hover:scale-[1.02];
+            }
+            .btn-primary {
+                @apply bg-primary-light dark:bg-primary-dark text-white font-medium py-2 px-4 rounded-lg transition-colors duration-300 hover:opacity-90;
+            }
+            .btn-secondary {
+                @apply bg-gray-200 dark:bg-gray-700 text-text-light dark:text-text-dark font-medium py-2 px-4 rounded-lg transition-colors duration-300 hover:opacity-90;
+            }
+            .input-field {
+                @apply w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-text-light dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-primary-light dark:focus:ring-primary-dark;
+            }
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-text-light dark:text-text-dark min-h-screen transition-colors duration-300">
+    <!-- 顶部导航栏 -->
+    <header class="sticky top-0 z-50 bg-white dark:bg-gray-800 shadow-md">
+        <div class="container mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+                <i class="fa fa-bookmark text-primary-light dark:text-primary-dark text-2xl"></i>
+                <h1 class="text-xl font-bold">跨设备书签</h1>
+            </div>
+            
+            <div class="flex items-center space-x-4">
+                <!-- 搜索框 -->
+                <div class="relative hidden md:block">
+                    <input type="text" id="search-input" placeholder="搜索书签..." class="input-field pr-10 w-64">
+                    <i class="fa fa-search absolute right-3 top-3 text-gray-400"></i>
+                </div>
+                
+                <!-- 主题切换按钮 -->
+                <button id="theme-toggle" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                    <i class="fa fa-sun-o dark:hidden text-yellow-500 text-xl"></i>
+                    <i class="fa fa-moon-o hidden dark:block text-blue-300 text-xl"></i>
+                </button>
+                
+                <!-- 移动端菜单按钮 -->
+                <button id="mobile-menu-button" class="md:hidden p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700">
+                    <i class="fa fa-bars text-xl"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- 移动端搜索框 -->
+        <div class="md:hidden px-4 pb-3">
+            <div class="relative">
+                <input type="text" id="mobile-search-input" placeholder="搜索书签..." class="input-field pr-10">
+                <i class="fa fa-search absolute right-3 top-3 text-gray-400"></i>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 py-6">
+        <!-- 分类筛选 -->
+        <div class="mb-6 overflow-x-auto">
+            <div class="flex space-x-2 pb-2">
+                <button class="category-btn btn-primary whitespace-nowrap" data-category="all">
+                    <i class="fa fa-th-large mr-1"></i> 全部
+                </button>
+                <div id="categories-container" class="flex space-x-2">
+                    <!-- 分类按钮将通过JS动态添加 -->
+                </div>
+                <button id="add-category-btn" class="btn-secondary whitespace-nowrap">
+                    <i class="fa fa-plus mr-1"></i> 添加分类
+                </button>
+            </div>
+        </div>
+
+        <!-- 书签网格 -->
+        <div id="bookmarks-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <!-- 书签卡片将通过JS动态添加 -->
+            <div class="col-span-full text-center py-12" id="empty-state">
+                <i class="fa fa-bookmark-o text-6xl text-gray-300 dark:text-gray-600 mb-4"></i>
+                <h2 class="text-xl font-medium mb-2">还没有书签</h2>
+                <p class="text-gray-500 dark:text-gray-400 mb-6">点击右下角按钮添加你的第一个书签</p>
+                <button id="add-first-bookmark" class="btn-primary">
+                    <i class="fa fa-plus mr-1"></i> 添加书签
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- 添加/编辑书签模态框 -->
+    <div id="bookmark-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center hidden">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4 transform transition-all">
+            <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <h2 id="modal-title" class="text-lg font-semibold">添加书签</h2>
+                <button id="close-modal" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+            <form id="bookmark-form" class="p-4">
+                <input type="hidden" id="bookmark-id">
+                <div class="mb-4">
+                    <label for="bookmark-title" class="block text-sm font-medium mb-1">标题</label>
+                    <input type="text" id="bookmark-title" class="input-field" placeholder="输入书签标题" required>
+                </div>
+                <div class="mb-4">
+                    <label for="bookmark-url" class="block text-sm font-medium mb-1">网址</label>
+                    <input type="url" id="bookmark-url" class="input-field" placeholder="https://example.com" required>
+                </div>
+                <div class="mb-4">
+                    <label for="bookmark-category" class="block text-sm font-medium mb-1">分类</label>
+                    <select id="bookmark-category" class="input-field">
+                        <option value="">无分类</option>
+                        <!-- 分类选项将通过JS动态添加 -->
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <label for="bookmark-tags" class="block text-sm font-medium mb-1">标签 (用逗号分隔)</label>
+                    <input type="text" id="bookmark-tags" class="input-field" placeholder="工作,重要,参考">
+                </div>
+                <div class="flex justify-end space-x-2 pt-2">
+                    <button type="button" id="cancel-bookmark" class="btn-secondary">取消</button>
+                    <button type="submit" class="btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 添加分类模态框 -->
+    <div id="category-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center hidden">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-sm mx-4">
+            <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <h2 class="text-lg font-semibold">添加分类</h2>
+                <button id="close-category-modal" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+            <form id="category-form" class="p-4">
+                <div class="mb-4">
+                    <label for="category-name" class="block text-sm font-medium mb-1">分类名称</label>
+                    <input type="text" id="category-name" class="input-field" placeholder="输入分类名称" required>
+                </div>
+                <div class="mb-4">
+                    <label for="category-color" class="block text-sm font-medium mb-1">分类颜色</label>
+                    <input type="color" id="category-color" class="w-full h-10 rounded-lg border border-gray-300 dark:border-gray-600 cursor-pointer" value="#3B82F6">
+                </div>
+                <div class="flex justify-end space-x-2 pt-2">
+                    <button type="button" id="cancel-category" class="btn-secondary">取消</button>
+                    <button type="submit" class="btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 确认删除模态框 -->
+    <div id="delete-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center hidden">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-sm mx-4">
+            <div class="p-4 border-b border-gray-200 dark:border-gray-700">
+                <h2 class="text-lg font-semibold">确认删除</h2>
+            </div>
+            <div class="p-4">
+                <p id="delete-confirm-text" class="mb-4">你确定要删除这个书签吗？此操作无法撤销。</p>
+                <div class="flex justify-end space-x-2">
+                    <button id="cancel-delete" class="btn-secondary">取消</button>
+                    <button id="confirm-delete" class="bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-300">删除</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加书签浮动按钮 -->
+    <button id="add-bookmark-btn" class="fixed right-6 bottom-6 bg-primary-light dark:bg-primary-dark text-white rounded-full w-14 h-14 flex items-center justify-center shadow-lg hover:scale-110 transition-all duration-300 z-40">
+        <i class="fa fa-plus text-2xl"></i>
+    </button>
+
+    <!-- 通知提示 -->
+    <div id="notification" class="fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg z-50 hidden transition-all duration-300 opacity-0">
+        <span id="notification-text">操作成功</span>
+    </div>
+
+    <script>
+        // 全局变量
+        let bookmarks = [];
+        let categories = [];
+        let currentEditId = null;
+        let currentDeleteId = null;
+        let currentCategory = 'all';
+        let searchQuery = '';
+
+        // DOM元素
+        const bookmarksGrid = document.getElementById('bookmarks-grid');
+        const emptyState = document.getElementById('empty-state');
+        const addBookmarkBtn = document.getElementById('add-bookmark-btn');
+        const addFirstBookmark = document.getElementById('add-first-bookmark');
+        const bookmarkModal = document.getElementById('bookmark-modal');
+        const closeModal = document.getElementById('close-modal');
+        const cancelBookmark = document.getElementById('cancel-bookmark');
+        const bookmarkForm = document.getElementById('bookmark-form');
+        const modalTitle = document.getElementById('modal-title');
+        const bookmarkId = document.getElementById('bookmark-id');
+        const bookmarkTitle = document.getElementById('bookmark-title');
+        const bookmarkUrl = document.getElementById('bookmark-url');
+        const bookmarkCategory = document.getElementById('bookmark-category');
+        const bookmarkTags = document.getElementById('bookmark-tags');
+        const categoryModal = document.getElementById('category-modal');
+        const closeCategoryModal = document.getElementById('close-category-modal');
+        const cancelCategory = document.getElementById('cancel-category');
+        const categoryForm = document.getElementById('category-form');
+        const categoryName = document.getElementById('category-name');
+        const categoryColor = document.getElementById('category-color');
+        const addCategoryBtn = document.getElementById('add-category-btn');
+        const categoriesContainer = document.getElementById('categories-container');
+        const deleteModal = document.getElementById('delete-modal');
+        const cancelDelete = document.getElementById('cancel-delete');
+        const confirmDelete = document.getElementById('confirm-delete');
+        const deleteConfirmText = document.getElementById('delete-confirm-text');
+        const searchInput = document.getElementById('search-input');
+        const mobileSearchInput = document.getElementById('mobile-search-input');
+        const themeToggle = document.getElementById('theme-toggle');
+        const notification = document.getElementById('notification');
+        const notificationText = document.getElementById('notification-text');
+
+        // 初始化应用
+        async function initApp() {
+            // 加载主题设置
+            loadTheme();
+            
+            // 加载数据
+            await loadData();
+            
+            // 渲染分类和书签
+            renderCategories();
+            renderBookmarks();
+            
+            // 设置事件监听器
+            setupEventListeners();
+        }
+
+        // 加载主题设置
+        function loadTheme() {
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            if (savedTheme === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        }
+
+        // 切换主题
+        function toggleTheme() {
+            if (document.documentElement.classList.contains('dark')) {
+                document.documentElement.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+            } else {
+                document.documentElement.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+            }
+        }
+
+        // 加载数据
+        async function loadData() {
+            try {
+                // 在实际应用中，这里会从Cloudflare KV获取数据
+                // 现在使用localStorage模拟
+                const savedBookmarks = localStorage.getItem('bookmarks');
+                const savedCategories = localStorage.getItem('categories');
+                
+                bookmarks = savedBookmarks ? JSON.parse(savedBookmarks) : [];
+                categories = savedCategories ? JSON.parse(savedCategories) : [
+                    { id: '1', name: '工作', color: '#3B82F6', createdAt: new Date().toISOString() },
+                    { id: '2', name: '学习', color: '#10B981', createdAt: new Date().toISOString() },
+                    { id: '3', name: '娱乐', color: '#F59E0B', createdAt: new Date().toISOString() }
+                ];
+                
+                // 如果是首次加载，保存默认分类
+                if (!savedCategories) {
+                    saveCategories();
+                }
+            } catch (error) {
+                console.error('加载数据失败:', error);
+                showNotification('加载数据失败', 'error');
+            }
+        }
+
+        // 保存书签数据
+        async function saveBookmarks() {
+            try {
+                // 在实际应用中，这里会保存到Cloudflare KV
+                localStorage.setItem('bookmarks', JSON.stringify(bookmarks));
+            } catch (error) {
+                console.error('保存书签失败:', error);
+                showNotification('保存书签失败', 'error');
+            }
+        }
+
+        // 保存分类数据
+        async function saveCategories() {
+            try {
+                // 在实际应用中，这里会保存到Cloudflare KV
+                localStorage.setItem('categories', JSON.stringify(categories));
+            } catch (error) {
+                console.error('保存分类失败:', error);
+                showNotification('保存分类失败', 'error');
+            }
+        }
+
+        // 渲染分类
+        function renderCategories() {
+            // 清空分类容器
+            categoriesContainer.innerHTML = '';
+            
+            // 添加分类按钮
+            categories.forEach(category => {
+                const categoryBtn = document.createElement('button');
+                categoryBtn.className = `category-btn btn-secondary whitespace-nowrap ${currentCategory === category.id ? 'btn-primary' : 'btn-secondary'}`;
+                categoryBtn.dataset.category = category.id;
+                
+                // 设置按钮样式
+                if (currentCategory === category.id) {
+                    categoryBtn.style.backgroundColor = category.color;
+                    categoryBtn.classList.remove('btn-secondary');
+                    categoryBtn.classList.add('btn-primary');
+                }
+                
+                categoryBtn.innerHTML = `
+                    <span class="inline-block w-3 h-3 rounded-full mr-1" style="background-color: ${category.color}"></span>
+                    ${category.name}
+                `;
+                
+                categoryBtn.addEventListener('click', () => {
+                    // 更新当前分类
+                    currentCategory = category.id;
+                    
+                    // 重新渲染分类和书签
+                    renderCategories();
+                    renderBookmarks();
+                });
+                
+                categoriesContainer.appendChild(categoryBtn);
+            });
+            
+            // 更新分类选择器
+            updateCategorySelector();
+        }
+
+        // 更新分类选择器
+        function updateCategorySelector() {
+            // 保存当前选中值
+            const currentValue = bookmarkCategory.value;
+            
+            // 清空选择器
+            bookmarkCategory.innerHTML = '<option value="">无分类</option>';
+            
+            // 添加分类选项
+            categories.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category.id;
+                option.textContent = category.name;
+                bookmarkCategory.appendChild(option);
+            });
+            
+            // 恢复选中值
+            bookmarkCategory.value = currentValue;
+        }
+
+        // 渲染书签
+        function renderBookmarks() {
+            // 清空书签网格
+            bookmarksGrid.innerHTML = '';
+            
+            // 筛选书签
+            let filteredBookmarks = bookmarks;
+            
+            // 按分类筛选
+            if (currentCategory !== 'all') {
+                filteredBookmarks = filteredBookmarks.filter(bookmark => bookmark.category === currentCategory);
+            }
+            
+            // 按搜索词筛选
+            if (searchQuery) {
+                const query = searchQuery.toLowerCase();
+                filteredBookmarks = filteredBookmarks.filter(bookmark => 
+                    bookmark.title.toLowerCase().includes(query) || 
+                    bookmark.url.toLowerCase().includes(query) ||
+                    (bookmark.tags && bookmark.tags.some(tag => tag.toLowerCase().includes(query)))
+                );
+            }
+            
+            // 按创建时间排序（最新的在前）
+            filteredBookmarks.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+            
+            // 显示空状态或书签
+            if (filteredBookmarks.length === 0) {
+                emptyState.classList.remove('hidden');
+                bookmarksGrid.appendChild(emptyState);
+            } else {
+                emptyState.classList.add('hidden');
+                
+                // 创建书签卡片
+                filteredBookmarks.forEach(bookmark => {
+                    const bookmarkCard = createBookmarkCard(bookmark);
+                    bookmarksGrid.appendChild(bookmarkCard);
+                });
+            }
+        }
+
+        // 创建书签卡片
+        function createBookmarkCard(bookmark) {
+            const card = document.createElement('div');
+            card.className = 'bookmark-card';
+            
+            // 获取分类信息
+            const category = categories.find(cat => cat.id === bookmark.category);
+            const categoryColor = category ? category.color : '#6B7280';
+            
+            // 格式化URL，移除协议和www前缀
+            let displayUrl = bookmark.url;
+            if (displayUrl.startsWith('https://')) {
+                displayUrl = displayUrl.substring(8);
+            } else if (displayUrl.startsWith('http://')) {
+                displayUrl = displayUrl.substring(7);
+            }
+            
+            if (displayUrl.startsWith('www.')) {
+                displayUrl = displayUrl.substring(4);
+            }
+            
+            // 限制URL显示长度
+            if (displayUrl.length > 30) {
+                displayUrl = displayUrl.substring(0, 30) + '...';
+            }
+            
+            // 生成标签HTML
+            let tagsHtml = '';
+            if (bookmark.tags && bookmark.tags.length > 0) {
+                tagsHtml = `
+                    <div class="flex flex-wrap gap-1 mt-2">
+                        ${bookmark.tags.map(tag => `
+                            <span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                                ${tag}
+                            </span>
+                        `).join('')}
+                    </div>
+                `;
+            }
+            
+            card.innerHTML = `
+                <div class="flex justify-between items-start">
+                    <div class="flex items-center space-x-2 mb-2">
+                        <div class="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center overflow-hidden">
+                            <img src="https://api.faviconkit.com/${new URL(bookmark.url).hostname}/16" alt="Favicon" onerror="this.src='https://via.placeholder.com/16?text=?'">
+                        </div>
+                        <h3 class="font-medium truncate max-w-[160px] sm:max-w-[200px]">${bookmark.title}</h3>
+                    </div>
+                    <div class="flex space-x-1">
+                        <button class="edit-bookmark p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700" data-id="${bookmark.id}">
+                            <i class="fa fa-pencil text-gray-500 dark:text-gray-400"></i>
+                        </button>
+                        <button class="delete-bookmark p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700" data-id="${bookmark.id}">
+                            <i class="fa fa-trash text-gray-500 dark:text-gray-400"></i>
+                        </button>
+                    </div>
+                </div>
+                <a href="${bookmark.url}" target="_blank" rel="noopener noreferrer" class="text-sm text-blue-500 dark:text-blue-400 hover:underline truncate block mb-2">
+                    ${displayUrl}
+                </a>
+                ${category ? `
+                    <div class="flex items-center text-xs text-gray-500 dark:text-gray-400 mb-2">
+                        <span class="inline-block w-2 h-2 rounded-full mr-1" style="background-color: ${categoryColor}"></span>
+                        ${category.name}
+                    </div>
+                ` : ''}
+                ${tagsHtml}
+            `;
+            
+            // 添加事件监听器
+            card.querySelector('.edit-bookmark').addEventListener('click', (e) => {
+                e.preventDefault();
+                openEditModal(bookmark.id);
+            });
+            
+            card.querySelector('.delete-bookmark').addEventListener('click', (e) => {
+                e.preventDefault();
+                openDeleteModal(bookmark.id);
+            });
+            
+            return card;
+        }
+
+        // 打开添加书签模态框
+        function openAddModal() {
+            // 重置表单
+            bookmarkForm.reset();
+            currentEditId = null;
+            modalTitle.textContent = '添加书签';
+            
+            // 显示模态框
+            bookmarkModal.classList.remove('hidden');
+            
+            // 聚焦到标题输入框
+            setTimeout(() => {
+                bookmarkTitle.focus();
+            }, 100);
+        }
+
+        // 打开编辑书签模态框
+        function openEditModal(id) {
+            const bookmark = bookmarks.find(b => b.id === id);
+            if (!bookmark) return;
+            
+            // 填充表单数据
+            currentEditId = id;
+            modalTitle.textContent = '编辑书签';
+            bookmarkId.value = bookmark.id;
+            bookmarkTitle.value = bookmark.title;
+            bookmarkUrl.value = bookmark.url;
+            bookmarkCategory.value = bookmark.category || '';
+            bookmarkTags.value = bookmark.tags ? bookmark.tags.join(', ') : '';
+            
+            // 显示模态框
+            bookmarkModal.classList.remove('hidden');
+            
+            // 聚焦到标题输入框
+            setTimeout(() => {
+                bookmarkTitle.focus();
+            }, 100);
+        }
+
+        // 关闭书签模态框
+        function closeBookmarkModal() {
+            bookmarkModal.classList.add('hidden');
+        }
+
+        // 打开添加分类模态框
+        function openAddCategoryModal() {
+            // 重置表单
+            categoryForm.reset();
+            categoryColor.value = '#3B82F6';
+            
+            // 显示模态框
+            categoryModal.classList.remove('hidden');
+            
+            // 聚焦到分类名称输入框
+            setTimeout(() => {
+                categoryName.focus();
+            }, 100);
+        }
+
+        // 关闭分类模态框
+        function closeCategoryModal() {
+            categoryModal.classList.add('hidden');
+        }
+
+        // 打开删除确认模态框
+        function openDeleteModal(id) {
+            const bookmark = bookmarks.find(b => b.id === id);
+            if (!bookmark) return;
+            
+            currentDeleteId = id;
+            deleteConfirmText.textContent = `你确定要删除"${bookmark.title}"这个书签吗？此操作无法撤销。`;
+            deleteModal.classList.remove('hidden');
+        }
+
+        // 关闭删除确认模态框
+        function closeDeleteModal() {
+            deleteModal.classList.add('hidden');
+        }
+
+        // 生成唯一ID
+        function generateId() {
+            return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+        }
+
+        // 保存书签
+        async function saveBookmark(event) {
+            event.preventDefault();
+            
+            // 获取表单数据
+            const title = bookmarkTitle.value.trim();
+            const url = bookmarkUrl.value.trim();
+            const category = bookmarkCategory.value;
+            const tagsInput = bookmarkTags.value.trim();
+            
+            // 验证URL格式
+            let formattedUrl = url;
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                formattedUrl = 'https://' + url;
+            }
+            
+            try {
+                new URL(formattedUrl);
+            } catch (error) {
+                showNotification('请输入有效的URL', 'error');
+                return;
+            }
+            
+            // 处理标签
+            let tags = [];
+            if (tagsInput) {
+                tags = tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag);
+            }
+            
+            const timestamp = new Date().toISOString();
+            
+            if (currentEditId) {
+                // 更新现有书签
+                const index = bookmarks.findIndex(b => b.id === currentEditId);
+                if (index !== -1) {
+                    bookmarks[index] = {
+                        ...bookmarks[index],
+                        title,
+                        url: formattedUrl,
+                        category,
+                        tags,
+                        updatedAt: timestamp
+                    };
+                    showNotification('书签已更新');
+                }
+            } else {
+                // 创建新书签
+                const newBookmark = {
+                    id: generateId(),
+                    title,
+                    url: formattedUrl,
+                    category,
+                    tags,
+                    createdAt: timestamp,
+                    updatedAt: timestamp
+                };
+                bookmarks.push(newBookmark);
+                showNotification('书签已添加');
+            }
+            
+            // 保存数据并更新UI
+            await saveBookmarks();
+            renderBookmarks();
+            closeBookmarkModal();
+        }
+
+        // 删除书签
+        async function deleteBookmark() {
+            if (currentDeleteId) {
+                const index = bookmarks.findIndex(b => b.id === currentDeleteId);
+                if (index !== -1) {
+                    const bookmarkTitle = bookmarks[index].title;
+                    bookmarks.splice(index, 1);
+                    
+                    // 保存数据并更新UI
+                    await saveBookmarks();
+                    renderBookmarks();
+                    closeDeleteModal();
+                    showNotification(`"${bookmarkTitle}" 已删除`);
+                }
+            }
+        }
+
+        // 保存分类
+        async function saveCategory(event) {
+            event.preventDefault();
+            
+            const name = categoryName.value.trim();
+            const color = categoryColor.value;
+            
+            if (!name) {
+                showNotification('请输入分类名称', 'error');
+                return;
+            }
+            
+            // 检查分类名称是否已存在
+            if (categories.some(cat => cat.name.toLowerCase() === name.toLowerCase())) {
+                showNotification('分类名称已存在', 'error');
+                return;
+            }
+            
+            const newCategory = {
+                id: generateId(),
+                name,
+                color,
+                createdAt: new Date().toISOString()
+            };
+            
+            categories.push(newCategory);
+            
+            // 保存数据并更新UI
+            await saveCategories();
+            renderCategories();
+            closeCategoryModal();
+            showNotification('分类已添加');
+        }
+
+        // 显示通知
+        function showNotification(message, type = 'success') {
+            notificationText.textContent = message;
+            
+            // 设置通知样式
+            if (type === 'error') {
+                notification.classList.remove('bg-gray-800');
+                notification.classList.add('bg-red-600');
+            } else {
+                notification.classList.remove('bg-red-600');
+                notification.classList.add('bg-gray-800');
+            }
+            
+            // 显示通知
+            notification.classList.remove('hidden');
+            setTimeout(() => {
+                notification.classList.add('opacity-100');
+            }, 10);
+            
+            // 3秒后隐藏通知
+            setTimeout(() => {
+                notification.classList.remove('opacity-100');
+                setTimeout(() => {
+                    notification.classList.add('hidden');
+                }, 300);
+            }, 3000);
+        }
+
+        // 设置事件监听器
+        function setupEventListeners() {
+            // 主题切换
+            themeToggle.addEventListener('click', toggleTheme);
+            
+            // 添加书签
+            addBookmarkBtn.addEventListener('click', openAddModal);
+            addFirstBookmark.addEventListener('click', openAddModal);
+            
+            // 书签模态框
+            closeModal.addEventListener('click', closeBookmarkModal);
+            cancelBookmark.addEventListener('click', closeBookmarkModal);
+            bookmarkForm.addEventListener('submit', saveBookmark);
+            
+            // 分类模态框
+            addCategoryBtn.addEventListener('click', openAddCategoryModal);
+            closeCategoryModal.addEventListener('click', closeCategoryModal);
+            cancelCategory.addEventListener('click', closeCategoryModal);
+            categoryForm.addEventListener('submit', saveCategory);
+            
+            // 删除模态框
+            cancelDelete.addEventListener('click', closeDeleteModal);
+            confirmDelete.addEventListener('click', deleteBookmark);
+            
+            // 搜索
+            searchInput.addEventListener('input', (e) => {
+                searchQuery = e.target.value;
+                renderBookmarks();
+            });
+            
+            mobileSearchInput.addEventListener('input', (e) => {
+                searchQuery = e.target.value;
+                searchInput.value = e.target.value;
+                renderBookmarks();
+            });
+            
+            // 点击模态框外部关闭
+            bookmarkModal.addEventListener('click', (e) => {
+                if (e.target === bookmarkModal) {
+                    closeBookmarkModal();
+                }
+            });
+            
+            categoryModal.addEventListener('click', (e) => {
+                if (e.target === categoryModal) {
+                    closeCategoryModal();
+                }
+            });
+            
+            deleteModal.addEventListener('click', (e) => {
+                if (e.target === deleteModal) {
+                    closeDeleteModal();
+                }
+            });
+            
+            // ESC键关闭模态框
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    closeBookmarkModal();
+                    closeCategoryModal();
+                    closeDeleteModal();
+                }
+            });
+            
+            // 动态添加的书签卡片事件委托
+            bookmarksGrid.addEventListener('click', (e) => {
+                const editBtn = e.target.closest('.edit-bookmark');
+                const deleteBtn = e.target.closest('.delete-bookmark');
+                
+                if (editBtn) {
+                    const id = editBtn.dataset.id;
+                    openEditModal(id);
+                } else if (deleteBtn) {
+                    const id = deleteBtn.dataset.id;
+                    openDeleteModal(id);
+                }
+            });
+        }
+
+        // 初始化应用
+        document.addEventListener('DOMContentLoaded', initApp);
+    </script>
+</body>
+</html>

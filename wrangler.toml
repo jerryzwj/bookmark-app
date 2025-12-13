@@ -1,0 +1,58 @@
+# Cloudflare Workers/Pages 配置文件
+# 用于配置项目部署到Cloudflare Pages和Workers
+
+# 项目名称
+name = "bookmark-app"
+
+# 项目类型
+type = "webpack"
+
+# Cloudflare账户ID (部署时需要替换为实际ID)
+account_id = "YOUR_ACCOUNT_ID"
+
+# 项目环境
+env = "production"
+
+# Workers配置
+workers_dev = true
+route = ""
+zone_id = ""
+
+# KV命名空间配置
+# 这些将在部署时创建
+kv_namespaces = [
+  { binding = "BOOKMARKS_APP_DATA", id = "", preview_id = "" },
+  { binding = "BOOKMARKS_APP_CONFIG", id = "", preview_id = "" }
+]
+
+# Pages配置
+[pages]
+# 构建输出目录
+build_output_dir = "dist"
+
+# 构建命令 (如果需要)
+# build_command = "npm run build"
+
+# 静态资源目录
+static_dir = "."
+
+# 忽略的文件和目录
+ignore = [
+  "node_modules",
+  ".git",
+  ".env",
+  "wrangler.toml",
+  "package.json",
+  "package-lock.json"
+]
+
+# 环境变量 (部署时需要设置实际值)
+[env.production]
+# 生产环境特定配置
+route = "your-domain.com/*"
+zone_id = "YOUR_ZONE_ID"
+
+# 开发环境配置
+[env.development]
+# 开发环境特定配置
+workers_dev = true
