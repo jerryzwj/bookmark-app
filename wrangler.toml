@@ -8,21 +8,21 @@ name = "bookmark-app"
 type = "webpack"
 
 # Cloudflare账户ID (部署时需要替换为实际ID)
-account_id = "YOUR_ACCOUNT_ID"
+account_id = "89083da2d04e9ab767cc53474dd54ba2"
 
 # 项目环境
 env = "production"
 
 # Workers配置
 workers_dev = true
-route = ""
-zone_id = ""
+route = "7.zhangwenjun.eu.org"
+zone_id = "496eff462db61053f607aaaea1cb2949"
 
 # KV命名空间配置
 # 这些将在部署时创建
 kv_namespaces = [
-  { binding = "BOOKMARKS_APP_DATA", id = "", preview_id = "" },
-  { binding = "BOOKMARKS_APP_CONFIG", id = "", preview_id = "" }
+  { binding = "BOOKMARKS_APP_DATA", id = "0e65b623090f41eea280593e75c1664e", preview_id = "0e65b623090f41eea280593e75c1664e" },
+  { binding = "BOOKMARKS_APP_CONFIG", id = "9535a505b4504e0db7751fe723540715", preview_id = "9535a505b4504e0db7751fe723540715" }
 ]
 
 # Pages配置
@@ -49,8 +49,8 @@ ignore = [
 # 环境变量 (部署时需要设置实际值)
 [env.production]
 # 生产环境特定配置
-route = "your-domain.com/*"
-zone_id = "YOUR_ZONE_ID"
+route = "*.zhangwenjun.eu.org/*"
+zone_id = "496eff462db61053f607aaaea1cb2949"
 
 # 开发环境配置
 [env.development]
