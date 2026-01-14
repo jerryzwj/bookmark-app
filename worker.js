@@ -1,4 +1,4 @@
-// Cloudflare Workers + KV 导航页【无ICO+分类版】- 极致流畅+分组显示
+// Cloudflare Workers + KV 导航页【无ICO+分类版】- 修复语法错误
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -24,14 +24,14 @@ export default {
       }
     }
 
-    // 前端页面（移除ICO+极致流畅）
+    // 前端页面（修复模板字符串反引号转义问题）
     return new Response(`
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>我的专属网址导航</title>
+  <title>我的专属网址</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
   <script>
@@ -60,6 +60,17 @@ export default {
         backdrop-filter: blur(12px); 
         border: 1px solid rgba(255,255,255,0.1); 
         border-radius: 16px; 
+      }
+      .modal-glass {
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(22, 93, 255, 0.15);
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.95);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+      }
+      .dark .modal-glass {
+        background: rgba(17, 24, 39, 0.95);
+        border: 1px solid rgba(255, 255, 255, 0.1);
       }
       .card-hover { transition: all 0.25s ease; }
       .card-hover:hover { 
@@ -90,11 +101,10 @@ export default {
       <button class="category-tag active px-4 py-2 rounded-full glass dark:glass-dark hover:bg-primary/10" data-category="all">
         全部
       </button>
-      <!-- 分类标签会动态生成 -->
     </div>
   </div>
 
-  <!-- 书签卡片容器（按分类分组） -->
+  <!-- 书签卡片容器 -->
   <main class="max-w-7xl mx-auto px-4 mb-16">
     <div id="bookmarkList" class="space-y-8">
       <div class="flex items-center justify-center h-36 text-gray-500 dark:text-gray-400">
@@ -104,29 +114,29 @@ export default {
   </main>
 
   <!-- 添加/编辑弹窗 -->
-  <div id="modal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-99 hidden backdrop-blur-sm">
-    <div class="glass dark:glass-dark w-full max-w-md p-7 shadow-2xl">
+  <div id="modal" class="fixed inset-0 bg-black/40 flex items-center justify-center z-99 hidden backdrop-blur-sm">
+    <div class="modal-glass w-full max-w-md p-7 shadow-2xl">
       <div class="flex justify-between items-center mb-5">
         <h2 id="modalTitle" class="text-xl font-bold text-primary">添加新网址</h2>
-        <button id="closeBtn" class="text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary text-xl">
+        <button id="closeBtn" class="text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary text-xl transition-colors">
           <i class="fa fa-times"></i>
         </button>
       </div>
       <form id="bookmarkForm" class="space-y-5">
         <input type="hidden" id="editId">
         <div>
-          <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">网站名称</label>
-          <input type="text" id="name" required class="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white/90 dark:bg-slate-700/90 outline-none focus:ring-2 focus:ring-primary/60 focus:border-primary" placeholder="例如：百度、GitHub">
+          <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200">网站名称</label>
+          <input type="text" id="name" required class="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-white/95 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-primary/60 focus:border-primary text-gray-800 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400" placeholder="例如：百度、GitHub">
         </div>
         <div>
-          <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">网站地址</label>
-          <input type="url" id="url" required class="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white/90 dark:bg-slate-700/90 outline-none focus:ring-2 focus:ring-primary/60 focus:border-primary" placeholder="https://www.baidu.com">
-          <p class="text-xs text-gray-500 mt-1">✅ 无需加载图标，页面更流畅</p>
+          <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200">网站地址</label>
+          <input type="url" id="url" required class="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-white/95 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-primary/60 focus:border-primary text-gray-800 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400" placeholder="https://www.baidu.com">
+          <p class="text-xs text-gray-600 dark:text-gray-300 mt-1">✅ 无需加载图标，页面更流畅</p>
         </div>
         <div>
-          <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">分类（必填）</label>
-          <input type="text" id="category" required class="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white/90 dark:bg-slate-700/90 outline-none focus:ring-2 focus:ring-primary/60 focus:border-primary" placeholder="例如：工具类、影音类、编程类、办公类">
-          <p class="text-xs text-gray-500 mt-1">💡 输入相同分类名会自动分组（如：工具类）</p>
+          <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200">分类（必填）</label>
+          <input type="text" id="category" required class="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-white/95 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-primary/60 focus:border-primary text-gray-800 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400" placeholder="例如：工具类、影音类、编程类、办公类">
+          <p class="text-xs text-gray-600 dark:text-gray-300 mt-1">💡 输入相同分类名会自动分组（如：工具类）</p>
         </div>
         <button type="submit" class="w-full bg-primary text-white py-3 rounded-lg shadow-md hover:opacity-90 transition-all mt-2 text-base">保存网址</button>
       </form>
@@ -135,18 +145,18 @@ export default {
 
   <script>
     let bookmarks = [];
-    let filteredCategory = 'all'; // 默认显示全部
+    let filteredCategory = 'all';
     const EDIT_NONE = -1;
     let editIndex = EDIT_NONE;
 
     // 随机卡片配色池
     const cardColorPool = [
-      'rgba(255,243,243,0.4)',  // 浅红
-      'rgba(243,255,243,0.4)',  // 浅绿
-      'rgba(243,243,255,0.4)',  // 浅蓝
-      'rgba(255,251,243,0.4)',  // 浅橙
-      'rgba(250,243,255,0.4)',  // 浅紫
-      'rgba(243,255,251,0.4)',  // 浅青
+      'rgba(255,107,104,0.4)',
+      'rgba(34,107,104,0.4)',
+      'rgba(69,67,129,0.4)',
+      'rgba(69,187,129,0.4)',
+      'rgba(250,220,129,0.4)',
+      'rgba(243,220,229,0.4)',
     ];
     const darkCardColorPool = [
       'rgba(45,35,35,0.4)',
@@ -179,26 +189,22 @@ export default {
     // 提取所有分类（去重）
     function getUniqueCategories() {
       const categories = bookmarks.map(item => item.category || '未分类').filter(Boolean);
-      return [...new Set(categories)].sort(); // 去重+排序
+      return [...new Set(categories)].sort();
     }
 
     // 渲染分类筛选栏
     function renderCategoryFilter() {
       const categories = getUniqueCategories();
-      // 清空原有分类标签（保留"全部"）
       const allBtn = categoryFilter.querySelector('[data-category="all"]');
       categoryFilter.innerHTML = '';
       categoryFilter.appendChild(allBtn);
 
-      // 添加分类标签
       categories.forEach(cat => {
         const btn = document.createElement('button');
         btn.className = 'category-tag px-4 py-2 rounded-full glass dark:glass-dark hover:bg-primary/10';
         btn.dataset.category = cat;
         btn.textContent = cat;
-        // 绑定筛选事件
         btn.addEventListener('click', () => {
-          // 切换激活状态
           document.querySelectorAll('.category-tag').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
           filteredCategory = cat;
@@ -207,7 +213,6 @@ export default {
         categoryFilter.appendChild(btn);
       });
 
-      // 重新绑定"全部"按钮事件
       allBtn.addEventListener('click', () => {
         document.querySelectorAll('.category-tag').forEach(b => b.classList.remove('active'));
         allBtn.classList.add('active');
@@ -216,32 +221,19 @@ export default {
       });
     }
 
-    // 按分类分组渲染书签（移除ICO，极致流畅）
+    // 按分类分组渲染书签
     function renderBookmarks() {
       if (bookmarks.length === 0) {
-        bookmarkList.innerHTML = \`
-          <div class="glass dark:glass-dark p-8 text-center">
-            <i class="fa fa-star-o text-5xl text-primary mb-4 opacity-80"></i>
-            <p class="text-lg text-gray-600 dark:text-gray-300">暂无收藏的网址</p>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">点击右上角「添加网址」，开始收藏你的常用网站吧 ✨</p>
-          </div>
-        \`;
+        bookmarkList.innerHTML = '\\n          <div class="glass dark:glass-dark p-8 text-center">\\n            <i class="fa fa-star-o text-5xl text-primary mb-4 opacity-80"></i>\\n            <p class="text-lg text-gray-600 dark:text-gray-300">暂无收藏的网址</p>\\n            <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">点击右上角「添加网址」，开始收藏你的常用网站吧 ✨</p>\\n          </div>\\n        ';
         return;
       }
 
-      // 筛选数据
       const filteredBookmarks = filteredCategory === 'all' 
         ? bookmarks 
         : bookmarks.filter(item => (item.category || '未分类') === filteredCategory);
 
       if (filteredBookmarks.length === 0) {
-        bookmarkList.innerHTML = \`
-          <div class="glass dark:glass-dark p-8 text-center">
-            <i class="fa fa-folder-open-o text-5xl text-primary mb-4 opacity-80"></i>
-            <p class="text-lg text-gray-600 dark:text-gray-300">「\${filteredCategory}」分类下暂无网址</p>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">点击右上角「添加网址」添加吧～</p>
-          </div>
-        \`;
+        bookmarkList.innerHTML = '\\n          <div class="glass dark:glass-dark p-8 text-center">\\n            <i class="fa fa-folder-open-o text-5xl text-primary mb-4 opacity-80"></i>\\n            <p class="text-lg text-gray-600 dark:text-gray-300">「' + filteredCategory + '」分类下暂无网址</p>\\n            <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">点击右上角「添加网址」添加吧～</p>\\n          </div>\\n        ';
         return;
       }
 
@@ -259,49 +251,15 @@ export default {
       let html = '';
       Object.keys(groupedBookmarks).forEach(cat => {
         const items = groupedBookmarks[cat];
-        // 分类标题
-        html += \`
-          <div class="category-group">
-            <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
-              <i class="fa fa-folder text-primary"></i> \${cat}（\${items.length}个）
-            </h2>
-            <!-- 分类下的卡片网格 -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
-        \`;
+        html += '\\n          <div class="category-group">\\n            <h2 class="text-xl font-bold mb-4 flex items-center gap-2">\\n              <i class="fa fa-folder text-primary"></i> ' + cat + '（' + items.length + '个）\\n            </h2>\\n            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">\\n        ';
 
-        // 分类下的卡片（移除ICO，优化布局）
         items.forEach((item, index) => {
-          const globalIndex = bookmarks.findIndex(b => b.name === item.name && b.url === item.url); // 全局索引
+          const globalIndex = bookmarks.findIndex(b => b.name === item.name && b.url === item.url);
           const cardBg = getRandomCardBg();
-          html += \`
-            <div class="glass dark:glass-dark p-5 card-hover flex flex-col h-full" style="background: \${cardBg}">
-              <div class="flex items-center justify-between mb-4">
-                <div class="flex-1">
-                  <h3 class="font-bold text-base sm:text-lg truncate" title="\${item.name}">\${item.name}</h3>
-                </div>
-                <div class="flex gap-2">
-                  <button onclick="editBookmark(\${globalIndex})" class="text-secondary hover:text-primary p-1 rounded" title="编辑">
-                    <i class="fa fa-pencil"></i>
-                  </button>
-                  <button onclick="deleteBookmark(\${globalIndex})" class="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-300 p-1 rounded" title="删除">
-                    <i class="fa fa-trash"></i>
-                  </button>
-                </div>
-              </div>
-              <a 
-                href="\${item.url}" 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                class="text-sm text-gray-600 dark:text-gray-300 break-all hover:text-primary transition-colors mb-2 flex-1"
-              >
-                \${item.url}
-              </a>
-              <p class="text-xs text-gray-500 dark:text-gray-400 mt-2 bg-gray-100/60 dark:bg-slate-700/50 px-2 py-1 rounded-md">\${cat}</p>
-            </div>
-          \`;
+          html += '\\n            <div class="glass dark:glass-dark p-5 card-hover flex flex-col h-full" style="background: ' + cardBg + '">\\n              <div class="flex items-center justify-between mb-4">\\n                <div class="flex-1">\\n                  <h3 class="font-bold text-base sm:text-lg truncate" title="' + item.name + '">' + item.name + '</h3>\\n                </div>\\n                <div class="flex gap-2">\\n                  <button onclick="editBookmark(' + globalIndex + ')" class="text-secondary hover:text-primary p-1 rounded" title="编辑">\\n                    <i class="fa fa-pencil"></i>\\n                  </button>\\n                  <button onclick="deleteBookmark(' + globalIndex + ')" class="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-300 p-1 rounded" title="删除">\\n                    <i class="fa fa-trash"></i>\\n                  </button>\\n                </div>\\n              </div>\\n              <a \\n                href="' + item.url + '" \\n                target="_blank" \\n                rel="noopener noreferrer" \\n                class="text-sm text-gray-600 dark:text-gray-300 break-all hover:text-primary transition-colors mb-2 flex-1"\\n              >\\n                ' + item.url + '\\n              </a>\\n              <p class="text-xs text-gray-500 dark:text-gray-400 mt-2 bg-gray-100/60 dark:bg-slate-700/50 px-2 py-1 rounded-md">' + cat + '</p>\\n            </div>\\n          ';
         });
 
-        html += \`</div></div>\`;
+        html += '\\n</div></div>\\n';
       });
 
       bookmarkList.innerHTML = html;
@@ -313,10 +271,9 @@ export default {
         const res = await fetch('/api/get');
         const data = await res.json();
         bookmarks = Array.isArray(data) ? data : [];
-        // 兼容旧数据（给无分类的旧数据加"未分类"）
         bookmarks = bookmarks.map(item => ({
           ...item,
-          category: item.category || item.desc || '未分类' // 旧数据的desc作为分类，无则归为未分类
+          category: item.category || item.desc || '未分类'
         }));
         localStorage.setItem('bookmarks_backup', JSON.stringify(bookmarks));
       } catch (err) {
@@ -327,8 +284,8 @@ export default {
           category: item.category || item.desc || '未分类'
         }));
       }
-      renderCategoryFilter(); // 先渲染分类筛选栏
-      renderBookmarks(); // 再渲染书签
+      renderCategoryFilter();
+      renderBookmarks();
     }
 
     // 保存书签数据
@@ -344,7 +301,7 @@ export default {
         alert('✅ 保存成功（本地），KV同步中');
         localStorage.setItem('bookmarks_backup', JSON.stringify(bookmarks));
       }
-      renderCategoryFilter(); // 保存后更新分类栏
+      renderCategoryFilter();
     }
 
     // 添加书签
@@ -377,19 +334,19 @@ export default {
       }
     }
 
-    // 表单提交（新增/编辑）
+    // 表单提交
     bookmarkForm.addEventListener('submit', (e) => {
       e.preventDefault();
       const newItem = {
         name: nameInput.value.trim(),
         url: urlInput.value.trim(),
-        category: categoryInput.value.trim() || '未分类' // 分类不能为空，默认未分类
+        category: categoryInput.value.trim() || '未分类'
       };
 
       if (editIndex === EDIT_NONE) {
-        bookmarks.unshift(newItem); // 新增的放最前面
+        bookmarks.unshift(newItem);
       } else {
-        bookmarks[editIndex] = newItem; // 编辑替换
+        bookmarks[editIndex] = newItem;
       }
 
       renderBookmarks();
