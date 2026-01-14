@@ -4,7 +4,7 @@
 
 ✅ 后端代码已内置 **跨域全兼容配置**，本地前端/部署前端均可正常调用，无需额外配置
 
-✅ 后端部署域名：`https://bj.1970.qzz.io` (所有示例均用此域名，直接复制即用)
+✅ 后端部署域名：`https://bj.xxxx.qzz.io` (所有示例均用此域名，直接复制即用)
 
 ---
 
@@ -26,7 +26,7 @@
 
 ### ✅ 1.2 接口基础规范
 
-- 接口根域名：`https://bj.1970.qzz.io`
+- 接口根域名：`https://bj.xxxx.qzz.io`
 
 - 所有接口 **返回值统一为 JSON 格式**，方便前端解析
 
@@ -58,7 +58,7 @@
 
 ✅ 请求方式：`POST` (必须为POST，不可改为GET)
 
-✅ 请求地址：`https://bj.1970.qzz.io/note`
+✅ 请求地址：`https://bj.xxxx.qzz.io/note`
 
 ✅ 接口特点：**新增和编辑共用这一个POST接口**，后端自动兼容，前端无需写2个请求方法
 
@@ -142,7 +142,7 @@
 const saveNote = async () => {
   const title = "我的笔记标题";
   const content = "我的笔记内容，支持换行\n和空格 还有特殊符号！@#￥%";
-  const res = await fetch("https://bj.1970.qzz.io/note", {
+  const res = await fetch("https://bj.xxxx.qzz.io/note", {
     method: "POST", // 必须是POST
     headers: {
       "Content-Type": "application/json", // POST必带请求头，核心！
@@ -158,7 +158,7 @@ const saveNote = async () => {
 
 ```JavaScript
 
-axios.post("https://bj.1970.qzz.io/note", {
+axios.post("https://bj.xxxx.qzz.io/note", {
   title: "我的笔记标题",
   content: "我的笔记内容"
 }, {
@@ -180,7 +180,7 @@ axios.post("https://bj.1970.qzz.io/note", {
 
 ✅ 请求方式：`GET` (必须为GET)
 
-✅ 请求地址：`https://bj.1970.qzz.io/notes`
+✅ 请求地址：`https://bj.xxxx.qzz.io/notes`
 
 ✅ 接口特点：无任何请求参数，直接GET请求即可，返回所有笔记的数组集合
 
@@ -220,7 +220,7 @@ axios.post("https://bj.1970.qzz.io/note", {
 
 // 原生fetch调用
 const getAllNotes = async () => {
-  const res = await fetch("https://bj.1970.qzz.io/notes"); // 直接GET请求，无参数
+  const res = await fetch("https://bj.xxxx.qzz.io/notes"); // 直接GET请求，无参数
   const data = await res.json();
   console.log(data.data); // 拿到笔记列表数组
 };
@@ -234,7 +234,7 @@ const getAllNotes = async () => {
 
 ✅ 请求方式：`DELETE` (必须为DELETE)
 
-✅ 请求地址：`https://bj.1970.qzz.io/note?title=笔记标题`
+✅ 请求地址：`https://bj.xxxx.qzz.io/note?title=笔记标题`
 
 ✅ 接口特点：参数通过 **URL 查询参数** 传递（不是JSON请求体），参数名固定为 `title`
 
@@ -242,7 +242,7 @@ const getAllNotes = async () => {
 
 - 参数名：`title` ，参数值：要删除的笔记标题
 
-- 参数位置：**URL拼接**，格式 `?title=xxx` ，例如：删除标题为「测试笔记」的接口地址：`https://bj.1970.qzz.io/note?title=测试笔记`
+- 参数位置：**URL拼接**，格式 `?title=xxx` ，例如：删除标题为「测试笔记」的接口地址：`https://bj.xxxx.qzz.io/note?title=测试笔记`
 
 - 标题为中文/特殊符号时，无需手动转码，前端会自动处理URL编码，直接拼接即可
 
@@ -273,7 +273,7 @@ const getAllNotes = async () => {
 // 原生fetch调用，删除标题为「测试笔记」的笔记
 const deleteNote = async () => {
   const title = "测试笔记";
-  const res = await fetch(`https://bj.1970.qzz.io/note?title=${title}`, {
+  const res = await fetch(`https://bj.xxxx.qzz.io/note?title=${title}`, {
     method: "DELETE", // 必须是DELETE
   });
   const data = await res.json();
@@ -289,7 +289,7 @@ const deleteNote = async () => {
 
 ### ✅ 方法1：浏览器直接调试（仅适用于 GET 接口，最简单）
 
-打开任意浏览器，地址栏输入 GET 接口地址：`https://bj.1970.qzz.io/notes` ，回车访问，即可直接看到返回的JSON数据，说明接口部署成功、KV绑定正常、跨域配置生效。
+打开任意浏览器，地址栏输入 GET 接口地址：`https://bj.xxxx.qzz.io/notes` ，回车访问，即可直接看到返回的JSON数据，说明接口部署成功、KV绑定正常、跨域配置生效。
 
 ### ✅ 方法2：POSTMAN 调试（推荐，支持 POST/GET/DELETE 所有请求方式，必用）
 
@@ -299,7 +299,7 @@ const deleteNote = async () => {
 
 1. 新建请求，选择请求方式：`POST`
 
-2. 输入请求地址：`https://bj.1970.qzz.io/note`
+2. 输入请求地址：`https://bj.xxxx.qzz.io/note`
 
 3. 切换到「Headers」选项卡，添加请求头：`Content-Type: application/json`
 
@@ -313,7 +313,7 @@ const deleteNote = async () => {
 
 1. 新建请求，选择请求方式：`DELETE`
 
-2. 输入请求地址：`https://bj.1970.qzz.io/note?title=测试POST接口`
+2. 输入请求地址：`https://bj.xxxx.qzz.io/note?title=测试POST接口`
 
 3. 直接点击「Send」，返回 `code:200` 即为删除成功。
 
@@ -321,7 +321,7 @@ const deleteNote = async () => {
 
 1. 新建请求，选择请求方式：`GET`
 
-2. 输入请求地址：`https://bj.1970.qzz.io/notes`
+2. 输入请求地址：`https://bj.xxxx.qzz.io/notes`
 
 3. 点击「Send」，即可看到所有笔记数据。
 
@@ -482,7 +482,7 @@ if (pathname === '/note' && request.method === 'GET') {
 
 ## 八、总结
 
-✅ 你的 Cloudflare Workers 后端已经部署完成，接口全部可用，域名 `https://bj.1970.qzz.io` 永久有效。
+✅ 你的 Cloudflare Workers 后端已经部署完成，接口全部可用，域名 `https://bj.xxxx.qzz.io` 永久有效。
 
 ✅ 3个核心接口覆盖所有业务，其中 **POST请求** 是核心，兼容新增和编辑，调用简单、逻辑清晰。
 
