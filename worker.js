@@ -1,10 +1,10 @@
-// Cloudflare Workers + KV 导航页【无ICO+分类版】- 修复语法错误
+// Cloudflare Workers + KV 导航页【分类下拉选择版】
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    // 后端API接口（稳定无错）
+    // 后端API接口
     if (path === '/api/get' && request.method === 'GET') {
       const bookmarks = await env.BOOKMARKS_KV.get('bookmarks');
       return new Response(bookmarks || JSON.stringify([]), {
@@ -24,7 +24,7 @@ export default {
       }
     }
 
-    // 前端页面（修复模板字符串反引号转义问题）
+    // 前端页面（新增分类下拉选择功能）
     return new Response(`
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -71,6 +71,21 @@ export default {
       .dark .modal-glass {
         background: rgba(17, 24, 39, 0.95);
         border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .category-dropdown {
+        max-height: 180px;
+        overflow-y: auto;
+        z-index: 100;
+      }
+      .category-dropdown-item {
+        transition: all 0.15s ease;
+      }
+      .category-dropdown-item:hover {
+        background-color: rgba(22, 93, 255, 0.1);
+        color: #165DFF;
+      }
+      .dark .category-dropdown-item:hover {
+        background-color: rgba(22, 93, 255, 0.2);
       }
       .card-hover { transition: all 0.25s ease; }
       .card-hover:hover { 
@@ -133,10 +148,23 @@ export default {
           <input type="url" id="url" required class="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-white/95 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-primary/60 focus:border-primary text-gray-800 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400" placeholder="https://www.baidu.com">
           <p class="text-xs text-gray-600 dark:text-gray-300 mt-1">✅ 无需加载图标，页面更流畅</p>
         </div>
-        <div>
+        <!-- 分类输入框 + 下拉选择容器 -->
+        <div class="relative">
           <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200">分类（必填）</label>
-          <input type="text" id="category" required class="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-white/95 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-primary/60 focus:border-primary text-gray-800 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400" placeholder="例如：工具类、影音类、编程类、办公类">
-          <p class="text-xs text-gray-600 dark:text-gray-300 mt-1">💡 输入相同分类名会自动分组（如：工具类）</p>
+          <input 
+            type="text" 
+            id="category" 
+            required 
+            class="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-white/95 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-primary/60 focus:border-primary text-gray-800 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400" 
+            placeholder="例如：工具类、影音类、编程类、办公类"
+          >
+          <!-- 分类下拉列表（默认隐藏） -->
+          <div id="categoryDropdown" class="category-dropdown absolute left-0 right-0 mt-1 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-slate-800 hidden">
+            <div id="categoryDropdownItems" class="p-2 space-y-1">
+              <!-- 下拉选项动态生成 -->
+            </div>
+          </div>
+          <p class="text-xs text-gray-600 dark:text-gray-300 mt-1">💡 可直接选择已有分类，或输入新分类</p>
         </div>
         <button type="submit" class="w-full bg-primary text-white py-3 rounded-lg shadow-md hover:opacity-90 transition-all mt-2 text-base">保存网址</button>
       </form>
@@ -178,6 +206,8 @@ export default {
     const nameInput = document.getElementById('name');
     const urlInput = document.getElementById('url');
     const categoryInput = document.getElementById('category');
+    const categoryDropdown = document.getElementById('categoryDropdown');
+    const categoryDropdownItems = document.getElementById('categoryDropdownItems');
 
     // 获取随机卡片背景色
     function getRandomCardBg() {
@@ -190,6 +220,38 @@ export default {
     function getUniqueCategories() {
       const categories = bookmarks.map(item => item.category || '未分类').filter(Boolean);
       return [...new Set(categories)].sort();
+    }
+
+    // 渲染分类下拉选择列表
+    function renderCategoryDropdown() {
+      const allCategories = getUniqueCategories();
+      const inputVal = categoryInput.value.trim().toLowerCase();
+      
+      // 过滤匹配的分类（模糊搜索）
+      const matchedCategories = allCategories.filter(cat => 
+        cat.toLowerCase().includes(inputVal)
+      );
+
+      if (matchedCategories.length === 0) {
+        categoryDropdown.classList.add('hidden');
+        return;
+      }
+
+      // 生成下拉选项
+      categoryDropdownItems.innerHTML = '';
+      matchedCategories.forEach(cat => {
+        const item = document.createElement('div');
+        item.className = 'category-dropdown-item px-3 py-2 rounded-md cursor-pointer text-gray-800 dark:text-gray-200';
+        item.textContent = cat;
+        // 点击选项填充到输入框
+        item.addEventListener('click', () => {
+          categoryInput.value = cat;
+          categoryDropdown.classList.add('hidden');
+        });
+        categoryDropdownItems.appendChild(item);
+      });
+
+      categoryDropdown.classList.remove('hidden');
     }
 
     // 渲染分类筛选栏
@@ -311,6 +373,8 @@ export default {
       editIndex = EDIT_NONE;
       modal.classList.remove('hidden');
       nameInput.focus();
+      // 初始化下拉列表
+      renderCategoryDropdown();
     }
 
     // 编辑书签
@@ -323,6 +387,8 @@ export default {
       editIndex = index;
       modal.classList.remove('hidden');
       nameInput.focus();
+      // 初始化下拉列表
+      renderCategoryDropdown();
     }
 
     // 删除书签
@@ -354,7 +420,17 @@ export default {
       modal.classList.add('hidden');
     });
 
-    // 事件监听
+    // 分类输入框事件监听（输入/聚焦时显示下拉）
+    categoryInput.addEventListener('input', renderCategoryDropdown);
+    categoryInput.addEventListener('focus', renderCategoryDropdown);
+    // 点击页面其他区域关闭下拉
+    document.addEventListener('click', (e) => {
+      if (!categoryInput.contains(e.target) && !categoryDropdown.contains(e.target)) {
+        categoryDropdown.classList.add('hidden');
+      }
+    });
+
+    // 其他事件监听
     addBtn.addEventListener('click', addBookmark);
     closeBtn.addEventListener('click', () => modal.classList.add('hidden'));
     modal.addEventListener('click', (e) => e.target === modal && modal.classList.add('hidden'));
