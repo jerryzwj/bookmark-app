@@ -2,7 +2,7 @@
 
 适配：前端(Pages)+后端(Workers)+存储(KV) 全套部署 | 纯免费/永久使用/全球访问 | 零基础友好 全程复制即用
 
-你的专属接口域名：`https://bj.1970.qzz.io`（已内置到前端代码，无需修改）
+你的专属接口域名：`https://bj.xxxx.qzz.io`（已内置到前端代码，无需修改）
 
 ## ⚙️ 前置准备
 
@@ -223,7 +223,7 @@ export default {
 
 ✅ 解决方案
 
-1. 核对前端代码中 `BASE_URL` 是否为 `https://bj.1970.qzz.io`（完全一致，含https://）
+1. 核对前端代码中 `BASE_URL` 是否为 `https://bj.xxxx.qzz.io`（完全一致，含https://）
 
 2. 检查Worker的KV绑定：变量名 `KV_STORE` + 命名空间 `note-kv` 是否正确
 
@@ -377,7 +377,7 @@ export default {
   </div>
   <div class="footer">技术支持 © 鸣谢 <a href="https://www.cloudflare.com/" target="_blank">Cloudflare</a> & <a href="https://www.doubao.com/" target="_blank">豆包</a></div>
   <script>
-    const BASE_URL = "https://bj.1970.qzz.io";
+    const BASE_URL = "https://bj.xxxx.qzz.io";
     let modalType = 'add';
     let currentEditTitle = null;
     const modal = document.getElementById('noteModal');
