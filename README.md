@@ -1,7 +1,6 @@
 # 分类式网址导航 - Cloudflare Worker 版
 一款基于 Cloudflare Worker + KV 构建的轻量级、高性能分类式网址导航工具，支持分类分组、随机配色、数据持久化，无冗余资源加载，流畅度拉满。
 
-![导航页预览](https://p3-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/2b3e2c2b8567478fb218075a701ed4c3.png~tplv-a9rns2rl98-image.png)
 
 
 ## ✨ 核心特性
