@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <!-- 移动端核心适配标签 强化版 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Cloudflare KV 云端笔记本 ✨</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      padding: 15px; /* 手机端缩小内边距，PC端也适配 */
+      padding-bottom: 90px; /* 给底部留足间距，避免遮挡 */
+      font-family: "Microsoft Yahei", "PingFang SC", sans-serif; 
+      background-color: #f5f7fa;
+      min-height: 100vh;
+      width: 100%;
+      overflow-x: hidden; /* 彻底禁止横向滚动，手机端核心！ */
+    }
+    .container {
+      max-width: 800px;
+      width: 100%; /* 手机端宽度100%满屏 */
+      margin: 0 auto;
+      padding: 0 5px;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px; /* 缩小间距，手机端更紧凑 */
+      flex-wrap: wrap; /* 适配小屏手机，按钮换行不挤 */
+      gap: 10px;
+    }
+    h2 { 
+      color: #2d3748; 
+      font-weight: 600;
+      letter-spacing: 1px;
+      font-size: 18px; /* 手机端标题字号适配 */
+      flex: 1;
+    }
+    button { 
+      padding: 10px 20px; /* 手机端按钮内边距优化，点击更舒服 */
+      cursor: pointer; 
+      font-size: 15px; /* 按钮字号适配手机 */
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      transition: all 0.25s ease;
+      font-weight: 500;
+      min-width: 90px; /* 按钮最小宽度，避免文字挤在一起 */
+    }
+    button:hover { 
+      opacity: 0.92;
+      transform: translateY(-1px);
+    }
+    button:active { transform: translateY(0); }
+    #addNoteBtn { background-color: #38a169; }
+    #refreshBtn { background-color: #4299e1; margin-left: 8px; }
+    #noteList { width: 100%; }
+    .note-item { 
+      padding: 18px 15px; /* 手机端卡片内边距缩小，不拥挤 */
+      border: 1px solid #e8e8e8; 
+      border-radius: 12px;
+      margin: 12px 0; /* 缩小卡片间距 */
+      background-color: #ffffff;
+      box-shadow: 0 1px 8px rgba(0,0,0,0.05);
+      transition: all 0.3s ease;
+      width: 100%;
+    }
+    .note-item:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+      border-color: #e0e0e0;
+    }
+    .note-item h3 { 
+      color: #2d3748; 
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #f0f0f0;
+      font-weight: 600;
+      font-size: 17px; /* 手机端标题字号优化 */
+    }
+    .note-item .note-content { 
+      color: #4a5568; 
+      line-height: 1.7;
+      margin-bottom: 10px;
+      white-space: pre-wrap;
+      font-size: 15px; /* 内容字号适配手机阅读 */
+      max-height: 150px; /* 手机端缩小折叠高度，避免占屏过大 */
+      overflow: hidden;
+      position: relative;
+    }
+    /* 折叠遮罩渐变效果 */
+    .note-item .note-content.collapse::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 35px;
+      background: linear-gradient(to bottom, transparent, #ffffff);
+    }
+    /* 展开状态取消限制 */
+    .note-item .note-content.expand {
+      max-height: none;
+    }
+    .note-item .note-content.expand::after {
+      display: none;
+    }
+    /* 展开/收起按钮样式 */
+    .toggle-btn {
+      color: #4299e1;
+      background: transparent;
+      padding: 0;
+      font-size: 14px;
+      margin-bottom: 12px;
+      display: inline-block;
+    }
+    .toggle-btn:hover {
+      transform: none;
+      opacity: 1;
+      color: #2b6cb0;
+      text-decoration: underline;
+    }
+    .note-btn {
+      padding: 8px 16px; /* 手机端按钮优化 */
+      font-size: 14px;
+      margin-right: 8px; /* 缩小按钮间距，避免换行 */
+      margin-bottom: 8px; /* 增加底部间距，适配小屏换行 */
+      border-radius: 6px;
+    }
+    .edit-btn { background-color: #ed8936; }
+    .del-btn { background-color: #e53e3e; }
+    .empty-tip {
+      color: #a0aec0;
+      text-align: center;
+      padding: 40px 0; /* 缩小空白提示间距 */
+      font-size: 15px;
+    }
+
+    /* 分页样式 手机端核心优化 */
+    .pagination {
+      margin-top: 30px;
+      text-align: center;
+      width: 100%;
+      overflow: hidden;
+    }
+    .pagination button {
+      padding: 7px 12px; /* 缩小分页按钮内边距 */
+      font-size: 13px;
+      margin: 0 3px; /* 缩小按钮间距 */
+      background-color: #4299e1;
+    }
+    .pagination .page-num {
+      padding: 7px 10px;
+      background-color: #f0f4f8;
+      color: #4a5568;
+    }
+    .pagination .page-num.active {
+      background-color: #2b6cb0;
+      color: #fff;
+    }
+    .pagination button:disabled {
+      background-color: #a0aec0;
+      cursor: not-allowed;
+      transform: none;
+      opacity: 0.7;
+    }
+
+    /* 弹窗核心样式 手机端满屏优化【重中之重】 */
+    .modal-mask {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0,0,0,0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s ease;
+      padding: 10px; /* 弹窗留边距，不贴屏 */
+    }
+    .modal-mask.show {
+      opacity: 1;
+      visibility: visible;
+    }
+    .modal-box {
+      width: 96%; /* 手机端96%满屏，最大化展示 */
+      max-width: 600px;
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 20px 18px; /* 缩小弹窗内边距 */
+      box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+      transform: translateY(-20px);
+      transition: all 0.3s ease;
+    }
+    .modal-mask.show .modal-box {
+      transform: translateY(0);
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+    .modal-header h3 {
+      color: #2d3748;
+      font-weight: 600;
+      font-size: 17px;
+    }
+    .close-btn {
+      width: 38px; /* 放大关闭按钮，手机点击更精准 */
+      height: 38px;
+      padding: 0;
+      background: #f7fafc;
+      color: #718096;
+      font-size: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-body .input-item { 
+      margin-bottom: 16px; 
+      display: flex;
+      flex-direction: column;
+    }
+    .modal-body label {
+      color: #4a5568;
+      font-size: 15px;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+    input, textarea { 
+      width: 100%; 
+      padding: 13px 15px; /* 加大输入框内边距，手机打字更舒服 */
+      font-size: 16px; 
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      outline: none;
+      transition: all 0.3s ease;
+      font-family: inherit;
+    }
+    input:focus, textarea:focus { 
+      border-color: #4299e1;
+      box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+    }
+    textarea { 
+      height: 180px; /* 手机端加大文本域高度，输入更多内容 */
+      resize: none; 
+      line-height: 1.6;
+      color: #2d3748;
+    }
+    input::placeholder, textarea::placeholder {
+      color: #a0aec0;
+      font-size: 15px;
+    }
+    .modal-footer {
+      marginTop: 18px;
+      text-align: right;
+    }
+    .modal-footer button {
+      margin-left: 8px;
+    }
+    #cancelBtn { background-color: #718096; }
+    #saveBtn { background-color: #38a169; }
+
+    /* 底部鸣谢版权样式 手机端优化 */
+    .footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      background-color: #ffffff;
+      border-top: 1px solid #e8e8e8;
+      padding: 12px 0;
+      text-align: center;
+      color: #718096;
+      font-size: 13px; /* 缩小字号，不遮挡内容 */
+      z-index: 999;
+    }
+    .footer a {
+      color: #4299e1;
+      text-decoration: none;
+      margin: 0 4px;
+    }
+    .footer a:hover {
+      text-decoration: underline;
+    }
+
+    /* ========== 媒体查询 精准适配手机端【终极适配】 ========== */
+    @media (max-width: 768px) {
+      body {
+        padding: 10px 8px;
+        padding-bottom: 85px;
+      }
+      .header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+      }
+      .header > div {
+        width: 100%;
+        display: flex;
+        gap: 8px;
+      }
+      #addNoteBtn, #refreshBtn {
+        flex: 1;
+        margin: 0;
+      }
+      .note-item {
+        padding: 15px 12px;
+        margin: 10px 0;
+      }
+      .note-btn {
+        padding: 7px 12px;
+        font-size: 13px;
+      }
+      .modal-box {
+        padding: 18px 15px;
+      }
+      textarea {
+        height: 160px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h2>✨ 我的云端笔记 · 永久保存</h2>
+      <div>
+        <button id="addNoteBtn" onclick="openModal('add')">新增笔记</button>
+        <button id="refreshBtn" onclick="getAllNotes()">刷新列表</button>
+      </div>
+    </div>
+    <div id="noteList"></div>
+    <div class="pagination" id="pagination"></div>
+  </div>
+
+  <div class="modal-mask" id="noteModal" onclick="closeModal()">
+    <div class="modal-box" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 id="modalTitle">新增笔记</h3>
+        <button class="close-btn" onclick="closeModal()">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="input-item">
+          <label>笔记标题</label>
+          <input type="text" id="modalTitleInput" placeholder="请输入笔记标题，不可为空">
+        </div>
+        <div class="input-item">
+          <label>笔记内容</label>
+          <textarea id="modalContentInput" placeholder="请输入笔记内容，支持换行、空格排版"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="cancelBtn" onclick="closeModal()">取消</button>
+        <button id="saveBtn" onclick="saveNote()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">技术支持 © 鸣谢 <a href="https://www.cloudflare.com/" target="_blank">Cloudflare</a> & <a href="https://www.doubao.com/" target="_blank">豆包</a></div>
+
+  <script>
+    const BASE_URL = "https://bj.1970.qzz.io";
+    let modalType = 'add';
+    let currentEditTitle = null;
+    const modal = document.getElementById('noteModal');
+    let allNotes = [];
+    const pageSize = 8;
+    let currentPage = 1;
+
+    function openModal(type, title = '', content = '') {
+      modalType = type;currentEditTitle = title;
+      const mt = document.getElementById('modalTitle'),ti=document.getElementById('modalTitleInput'),ci=document.getElementById('modalContentInput');
+      type==='add'?(mt.innerText='新增笔记',ti.value='',ci.value=''):(mt.innerText='编辑笔记',ti.value=title,ci.value=restoreSpecial(content));
+      modal.classList.add('show');ti.focus();
+    }
+    function closeModal(){modal.classList.remove('show');currentEditTitle=null;}
+    async function saveNote(){
+      const title=document.getElementById('modalTitleInput').value.trim(),content=document.getElementById('modalContentInput').value.trim();
+      if(!title||!content)return alert('⚠️ 标题和内容不能为空哦！');
+      if(modalType==='edit'&&currentEditTitle&&currentEditTitle!==title)await fetch(`${BASE_URL}/note?title=${currentEditTitle}`,{method:'DELETE'});
+      const res=await fetch(`${BASE_URL}/note`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,content})});
+      const data=await res.json();alert(data.msg);closeModal();currentPage=1;getAllNotes();
+    }
+    async function getAllNotes(){
+      const res=await fetch(`${BASE_URL}/notes`);const data=await res.json();allNotes=data.data;renderNotes(currentPage);renderPagination();
+    }
+    function renderNotes(page){
+      const list=document.getElementById('noteList');list.innerHTML='';
+      const start=(page-1)*pageSize,end=start+pageSize,pageNotes=allNotes.slice(start,end);
+      if(allNotes.length===0){list.innerHTML='<p class="empty-tip">暂无笔记，点击「新增笔记」创建你的第一条云端笔记吧～</p>';return;}
+      pageNotes.forEach((note,index)=>{
+        const domIndex=(currentPage-1)*pageSize+index;
+        list.innerHTML+=`<div class="note-item"><h3>${note.title}</h3><div class="note-content collapse" id="content_${domIndex}">${note.content}</div><button class="toggle-btn" onclick="toggleContent(${domIndex})">展开全文</button><button class="note-btn edit-btn" onclick="openModal('edit','${note.title}','${replaceSpecial(note.content)}')">编辑</button><button class="note-btn del-btn" onclick="deleteNote('${note.title}')">删除</button></div>`;
+      });
+    }
+    function renderPagination(){
+      const p=document.getElementById('pagination');p.innerHTML='';const total=allNotes.length,totalPages=Math.ceil(total/pageSize);
+      if(totalPages<=1)return;p.innerHTML+=`<button onclick="changePage(${currentPage-1})" ${currentPage===1?'disabled':''}>上一页</button>`;
+      for(let i=1;i<=totalPages;i++)p.innerHTML+=`<button class="page-num ${i===currentPage?'active':''}" onclick="changePage(${i})">${i}</button>`;
+      p.innerHTML+=`<button onclick="changePage(${currentPage+1})" ${currentPage===totalPages?'disabled':''}>下一页</button>`;
+    }
+    function changePage(page){
+      const totalPages=Math.ceil(allNotes.length/pageSize);if(page<1||page>totalPages)return;
+      currentPage=page;renderNotes(currentPage);renderPagination();window.scrollTo(0,0);
+    }
+    function toggleContent(id){
+      const d=document.getElementById(`content_${id}`),b=d.nextElementSibling;
+      d.classList.contains('collapse')?(d.classList.remove('collapse'),d.classList.add('expand'),b.innerText='收起内容'):(d.classList.remove('expand'),d.classList.add('collapse'),b.innerText='展开全文');
+    }
+    async function deleteNote(title){
+      if(!confirm(`确定要删除「${title}」吗？\n该操作不可恢复，请谨慎！`))return;
+      const res=await fetch(`${BASE_URL}/note?title=${title}`,{method:'DELETE'});const data=await res.json();alert(data.msg);currentPage=1;getAllNotes();
+    }
+    function replaceSpecial(str){return str.replace(/'/g,"&apos;").replace(/"/g,"&quot;").replace(/\n/g,'\\n');}
+    function restoreSpecial(str){return str.replace(/&apos;/g,"'").replace(/&quot;/g,'"').replace(/\\n/g,'\n');}
+
+    window.onload=getAllNotes;
+  </script>
+</body>
+</html>
