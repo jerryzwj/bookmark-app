@@ -1,10 +1,10 @@
-// Cloudflare Workers + KV 导航页【分类下拉选择版】
+// Cloudflare Workers + KV 导航页【手机多列+PC列数限制版】
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    // 后端API接口
+    // 后端API接口（无改动）
     if (path === '/api/get' && request.method === 'GET') {
       const bookmarks = await env.BOOKMARKS_KV.get('bookmarks');
       return new Response(bookmarks || JSON.stringify([]), {
@@ -24,14 +24,15 @@ export default {
       }
     }
 
-    // 前端页面（新增分类下拉选择功能）
+    // 前端页面（核心修改：限制PC最大列数为5列）
     return new Response(`
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>我的专属网址</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>专属导航</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
   <script>
@@ -89,39 +90,48 @@ export default {
       }
       .card-hover { transition: all 0.25s ease; }
       .card-hover:hover { 
-        transform: translateY(-4px); 
-        box-shadow: 0 12px 20px -8px rgba(22, 93, 255, 0.2); 
+        @apply md:translate-y-[-4px] md:shadow-[0_12px_20px_-8px_rgba(22,93,255,0.2)];
+        box-shadow: 0 6px 12px -4px rgba(22, 93, 255, 0.15);
       }
       .category-tag { transition: all 0.2s ease; }
       .category-tag.active { background: #165DFF; color: white; }
+      .no-tap { -webkit-tap-highlight-color: transparent; }
     }
+  </style>
+  <style>
+    /* 手机端优化基础样式 */
+    * { box-sizing: border-box; }
+    body { touch-action: manipulation; }
+    ::-webkit-scrollbar { height: 4px; width: 4px; }
+    ::-webkit-scrollbar-thumb { background: #165DFF33; border-radius: 2px; }
+    .overflow-x-auto { scrollbar-width: thin; -ms-overflow-style: none; }
   </style>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-blue-50 via-slate-50 to-indigo-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 text-slate-800 dark:text-white bg-fixed">
   <!-- 顶部导航 -->
-  <header class="glass dark:glass-dark sticky top-0 z-50 px-4 py-4 mb-4 shadow-sm">
+  <header class="glass dark:glass-dark sticky top-0 z-50 px-3 py-2.5 mb-4 shadow-sm no-tap">
     <div class="max-w-7xl mx-auto flex justify-between items-center">
-      <h1 class="text-[clamp(1.4rem,3vw,1.8rem)] font-bold text-primary flex items-center gap-2">
-        <i class="fa fa-link text-xl"></i> 我的专属网址导航
+      <h1 class="text-[clamp(1.1rem,3vw,1.6rem)] font-bold text-primary flex items-center gap-2">
+        <i class="fa fa-link text-lg"></i> 网址导航
       </h1>
-      <button id="addBtn" class="bg-primary text-white px-5 py-2 rounded-full flex items-center gap-2 shadow-lg hover:opacity-90 transition-all">
-        <i class="fa fa-plus"></i> 添加网址
+      <button id="addBtn" class="bg-primary text-white px-3.5 py-1.5 rounded-full flex items-center gap-1.5 shadow-lg hover:opacity-90 transition-all text-sm">
+        <i class="fa fa-plus text-sm"></i> 添加
       </button>
     </div>
   </header>
 
   <!-- 分类筛选栏 -->
-  <div class="max-w-7xl mx-auto px-4 mb-8 overflow-x-auto pb-2">
-    <div id="categoryFilter" class="flex gap-2 whitespace-nowrap">
-      <button class="category-tag active px-4 py-2 rounded-full glass dark:glass-dark hover:bg-primary/10" data-category="all">
+  <div class="max-w-7xl mx-auto px-3 mb-5 overflow-x-auto pb-2">
+    <div id="categoryFilter" class="flex gap-2 whitespace-nowrap w-max">
+      <button class="category-tag active px-3 py-2 rounded-full glass dark:glass-dark hover:bg-primary/10 no-tap text-sm min-w-[70px] text-center" data-category="all">
         全部
       </button>
     </div>
   </div>
 
   <!-- 书签卡片容器 -->
-  <main class="max-w-7xl mx-auto px-4 mb-16">
-    <div id="bookmarkList" class="space-y-8">
+  <main class="max-w-7xl mx-auto px-3 mb-10">
+    <div id="bookmarkList" class="space-y-5">
       <div class="flex items-center justify-center h-36 text-gray-500 dark:text-gray-400">
         <i class="fa fa-spinner fa-spin mr-3 text-xl"></i> 加载常用网址中...
       </div>
@@ -129,34 +139,34 @@ export default {
   </main>
 
   <!-- 添加/编辑弹窗 -->
-  <div id="modal" class="fixed inset-0 bg-black/40 flex items-center justify-center z-99 hidden backdrop-blur-sm">
-    <div class="modal-glass w-full max-w-md p-7 shadow-2xl">
-      <div class="flex justify-between items-center mb-5">
-        <h2 id="modalTitle" class="text-xl font-bold text-primary">添加新网址</h2>
-        <button id="closeBtn" class="text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary text-xl transition-colors">
+  <div id="modal" class="fixed inset-0 bg-black/40 flex items-center justify-center z-99 hidden backdrop-blur-sm no-tap">
+    <div class="modal-glass w-[94%] max-w-md p-5 shadow-2xl">
+      <div class="flex justify-between items-center mb-4">
+        <h2 id="modalTitle" class="text-lg font-bold text-primary">添加新网址</h2>
+        <button id="closeBtn" class="text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary text-lg transition-colors no-tap">
           <i class="fa fa-times"></i>
         </button>
       </div>
-      <form id="bookmarkForm" class="space-y-5">
+      <form id="bookmarkForm" class="space-y-4">
         <input type="hidden" id="editId">
         <div>
-          <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200">网站名称</label>
-          <input type="text" id="name" required class="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-white/95 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-primary/60 focus:border-primary text-gray-800 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400" placeholder="例如：百度、GitHub">
+          <label class="block text-sm font-medium mb-1.5 text-gray-700 dark:text-gray-200">网站名称</label>
+          <input type="text" id="name" required class="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-white/95 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-primary/60 focus:border-primary text-gray-800 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 text-base" placeholder="例如：百度、GitHub">
         </div>
         <div>
-          <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200">网站地址</label>
-          <input type="url" id="url" required class="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-white/95 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-primary/60 focus:border-primary text-gray-800 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400" placeholder="https://www.baidu.com">
+          <label class="block text-sm font-medium mb-1.5 text-gray-700 dark:text-gray-200">网站地址</label>
+          <input type="url" id="url" required class="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-white/95 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-primary/60 focus:border-primary text-gray-800 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 text-base" placeholder="https://www.baidu.com">
           <p class="text-xs text-gray-600 dark:text-gray-300 mt-1">✅ 无需加载图标，页面更流畅</p>
         </div>
         <!-- 分类输入框 + 下拉选择容器 -->
         <div class="relative">
-          <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200">分类（必填）</label>
+          <label class="block text-sm font-medium mb-1.5 text-gray-700 dark:text-gray-200">分类（必填）</label>
           <input 
             type="text" 
             id="category" 
             required 
-            class="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-white/95 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-primary/60 focus:border-primary text-gray-800 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400" 
-            placeholder="例如：工具类、影音类、编程类、办公类"
+            class="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-white/95 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-primary/60 focus:border-primary text-gray-800 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 text-base" 
+            placeholder="例如：工具类、影音类、编程类"
           >
           <!-- 分类下拉列表（默认隐藏） -->
           <div id="categoryDropdown" class="category-dropdown absolute left-0 right-0 mt-1 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-slate-800 hidden">
@@ -166,7 +176,7 @@ export default {
           </div>
           <p class="text-xs text-gray-600 dark:text-gray-300 mt-1">💡 可直接选择已有分类，或输入新分类</p>
         </div>
-        <button type="submit" class="w-full bg-primary text-white py-3 rounded-lg shadow-md hover:opacity-90 transition-all mt-2 text-base">保存网址</button>
+        <button type="submit" class="w-full bg-primary text-white py-3 rounded-lg shadow-md hover:opacity-90 transition-all mt-2 text-base no-tap">保存网址</button>
       </form>
     </div>
   </div>
@@ -179,20 +189,20 @@ export default {
 
     // 随机卡片配色池
     const cardColorPool = [
-      'rgba(255,107,104,0.4)',
-      'rgba(34,107,104,0.4)',
-      'rgba(69,67,129,0.4)',
-      'rgba(69,187,129,0.4)',
-      'rgba(250,220,129,0.4)',
-      'rgba(243,220,229,0.4)',
+      'rgba(255,107,104,0.3)',
+      'rgba(34,107,104,0.3)',
+      'rgba(69,67,129,0.3)',
+      'rgba(69,187,129,0.3)',
+      'rgba(250,220,129,0.3)',
+      'rgba(243,220,229,0.3)',
     ];
     const darkCardColorPool = [
-      'rgba(45,35,35,0.4)',
-      'rgba(35,45,35,0.4)',
-      'rgba(35,35,45,0.4)',
-      'rgba(45,40,35,0.4)',
-      'rgba(40,35,45,0.4)',
-      'rgba(35,45,45,0.4)',
+      'rgba(45,35,35,0.3)',
+      'rgba(35,45,35,0.3)',
+      'rgba(35,35,45,0.3)',
+      'rgba(45,40,35,0.3)',
+      'rgba(40,35,45,0.3)',
+      'rgba(35,45,45,0.3)',
     ];
 
     // DOM元素
@@ -241,7 +251,7 @@ export default {
       categoryDropdownItems.innerHTML = '';
       matchedCategories.forEach(cat => {
         const item = document.createElement('div');
-        item.className = 'category-dropdown-item px-3 py-2 rounded-md cursor-pointer text-gray-800 dark:text-gray-200';
+        item.className = 'category-dropdown-item px-3 py-2 rounded-md cursor-pointer text-gray-800 dark:text-gray-200 no-tap';
         item.textContent = cat;
         // 点击选项填充到输入框
         item.addEventListener('click', () => {
@@ -263,7 +273,7 @@ export default {
 
       categories.forEach(cat => {
         const btn = document.createElement('button');
-        btn.className = 'category-tag px-4 py-2 rounded-full glass dark:glass-dark hover:bg-primary/10';
+        btn.className = 'category-tag px-3 py-2 rounded-full glass dark:glass-dark hover:bg-primary/10 no-tap text-sm min-w-[70px] text-center';
         btn.dataset.category = cat;
         btn.textContent = cat;
         btn.addEventListener('click', () => {
@@ -283,10 +293,10 @@ export default {
       });
     }
 
-    // 按分类分组渲染书签
+    // 核心修改：限制PC最大列数为5列，手机端保留多列
     function renderBookmarks() {
       if (bookmarks.length === 0) {
-        bookmarkList.innerHTML = '\\n          <div class="glass dark:glass-dark p-8 text-center">\\n            <i class="fa fa-star-o text-5xl text-primary mb-4 opacity-80"></i>\\n            <p class="text-lg text-gray-600 dark:text-gray-300">暂无收藏的网址</p>\\n            <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">点击右上角「添加网址」，开始收藏你的常用网站吧 ✨</p>\\n          </div>\\n        ';
+        bookmarkList.innerHTML = '\\n          <div class="glass dark:glass-dark p-6 text-center">\\n            <i class="fa fa-star-o text-4xl text-primary mb-3 opacity-80"></i>\\n            <p class="text-base text-gray-600 dark:text-gray-300">暂无收藏的网址</p>\\n            <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">点击右上角「添加」，开始收藏你的常用网站吧 ✨</p>\\n          </div>\\n        ';
         return;
       }
 
@@ -295,7 +305,7 @@ export default {
         : bookmarks.filter(item => (item.category || '未分类') === filteredCategory);
 
       if (filteredBookmarks.length === 0) {
-        bookmarkList.innerHTML = '\\n          <div class="glass dark:glass-dark p-8 text-center">\\n            <i class="fa fa-folder-open-o text-5xl text-primary mb-4 opacity-80"></i>\\n            <p class="text-lg text-gray-600 dark:text-gray-300">「' + filteredCategory + '」分类下暂无网址</p>\\n            <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">点击右上角「添加网址」添加吧～</p>\\n          </div>\\n        ';
+        bookmarkList.innerHTML = '\\n          <div class="glass dark:glass-dark p-6 text-center">\\n            <i class="fa fa-folder-open-o text-4xl text-primary mb-3 opacity-80"></i>\\n            <p class="text-base text-gray-600 dark:text-gray-300">「' + filteredCategory + '」分类下暂无网址</p>\\n            <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">点击右上角「添加」添加吧～</p>\\n          </div>\\n        ';
         return;
       }
 
@@ -309,16 +319,16 @@ export default {
         groupedBookmarks[cat].push(item);
       });
 
-      // 渲染分组
+      // 核心修改：固定响应式列数，PC最多5列
       let html = '';
       Object.keys(groupedBookmarks).forEach(cat => {
         const items = groupedBookmarks[cat];
-        html += '\\n          <div class="category-group">\\n            <h2 class="text-xl font-bold mb-4 flex items-center gap-2">\\n              <i class="fa fa-folder text-primary"></i> ' + cat + '（' + items.length + '个）\\n            </h2>\\n            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">\\n        ';
+        html += '\\n          <div class="category-group">\\n            <h2 class="text-lg font-bold mb-3 flex items-center gap-2">\\n              <i class="fa fa-folder text-primary"></i> ' + cat + '（' + items.length + '个）\\n            </h2>\\n            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">\\n        ';
 
         items.forEach((item, index) => {
           const globalIndex = bookmarks.findIndex(b => b.name === item.name && b.url === item.url);
           const cardBg = getRandomCardBg();
-          html += '\\n            <div class="glass dark:glass-dark p-5 card-hover flex flex-col h-full" style="background: ' + cardBg + '">\\n              <div class="flex items-center justify-between mb-4">\\n                <div class="flex-1">\\n                  <h3 class="font-bold text-base sm:text-lg truncate" title="' + item.name + '">' + item.name + '</h3>\\n                </div>\\n                <div class="flex gap-2">\\n                  <button onclick="editBookmark(' + globalIndex + ')" class="text-secondary hover:text-primary p-1 rounded" title="编辑">\\n                    <i class="fa fa-pencil"></i>\\n                  </button>\\n                  <button onclick="deleteBookmark(' + globalIndex + ')" class="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-300 p-1 rounded" title="删除">\\n                    <i class="fa fa-trash"></i>\\n                  </button>\\n                </div>\\n              </div>\\n              <a \\n                href="' + item.url + '" \\n                target="_blank" \\n                rel="noopener noreferrer" \\n                class="text-sm text-gray-600 dark:text-gray-300 break-all hover:text-primary transition-colors mb-2 flex-1"\\n              >\\n                ' + item.url + '\\n              </a>\\n              <p class="text-xs text-gray-500 dark:text-gray-400 mt-2 bg-gray-100/60 dark:bg-slate-700/50 px-2 py-1 rounded-md">' + cat + '</p>\\n            </div>\\n          ';
+          html += '\\n            <div class="glass dark:glass-dark p-3 card-hover flex flex-col h-full" style="background: ' + cardBg + '">\\n              <div class="flex items-center justify-between mb-2">\\n                <div class="flex-1">\\n                  <h3 class="font-bold text-xs sm:text-sm truncate" title="' + item.name + '">' + item.name + '</h3>\\n                </div>\\n                <div class="flex gap-1.5">\\n                  <button onclick="editBookmark(' + globalIndex + ')" class="text-secondary hover:text-primary p-1 rounded no-tap" title="编辑">\\n                    <i class="fa fa-pencil text-xs"></i>\\n                  </button>\\n                  <button onclick="deleteBookmark(' + globalIndex + ')" class="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-300 p-1 rounded no-tap" title="删除">\\n                    <i class="fa fa-trash text-xs"></i>\\n                  </button>\\n                </div>\\n              </div>\\n              <a \\n                href="' + item.url + '" \\n                target="_blank" \\n                rel="noopener noreferrer" \\n                class="text-[10px] sm:text-xs text-gray-600 dark:text-gray-300 break-all hover:text-primary transition-colors mb-2 flex-1"\\n              >\\n                ' + item.url + '\\n              </a>\\n              <p class="text-[9px] sm:text-xs text-gray-500 dark:text-gray-400 mt-1 bg-gray-100/60 dark:bg-slate-700/50 px-1.5 py-0.5 rounded-md">' + cat + '</p>\\n            </div>\\n          ';
         });
 
         html += '\\n</div></div>\\n';
@@ -373,7 +383,6 @@ export default {
       editIndex = EDIT_NONE;
       modal.classList.remove('hidden');
       nameInput.focus();
-      // 初始化下拉列表
       renderCategoryDropdown();
     }
 
@@ -387,7 +396,6 @@ export default {
       editIndex = index;
       modal.classList.remove('hidden');
       nameInput.focus();
-      // 初始化下拉列表
       renderCategoryDropdown();
     }
 
@@ -420,10 +428,9 @@ export default {
       modal.classList.add('hidden');
     });
 
-    // 分类输入框事件监听（输入/聚焦时显示下拉）
+    // 分类输入框事件监听
     categoryInput.addEventListener('input', renderCategoryDropdown);
     categoryInput.addEventListener('focus', renderCategoryDropdown);
-    // 点击页面其他区域关闭下拉
     document.addEventListener('click', (e) => {
       if (!categoryInput.contains(e.target) && !categoryDropdown.contains(e.target)) {
         categoryDropdown.classList.add('hidden');
