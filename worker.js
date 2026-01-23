@@ -805,24 +805,12 @@ export default {
           // 标题和操作按钮
           html += '<div class="flex items-center justify-between mb-2">';
           html += '<div class="flex items-center gap-2 flex-1">';
-          // 提取网址的根域名，用于获取favicon
-          let domain = '';
-          try {
-            const urlObj = new URL(item.url);
-            domain = urlObj.protocol + '//' + urlObj.hostname;
-          } catch (e) {
-            domain = '';
-          }
+          // 显示名称的第一个字符作为图标
+          const firstChar = item.name.charAt(0).toUpperCase();
           
-          // 构建favicon URL，使用GitHub图标作为默认
-          let faviconUrl = 'https://github.com/favicon.ico';
-          if (domain) {
-            faviconUrl = domain + '/favicon.ico';
-          }
-          
-          // 添加网址图标，使用onerror处理获取不到图标的情况
-          html += '<div class="w-6 h-6 rounded-md overflow-hidden bg-white/80 dark:bg-slate-700/50 flex items-center justify-center flex-shrink-0">';
-          html += '<img src="' + faviconUrl + '" alt="favicon" class="w-4 h-4 object-contain" onerror="this.onerror=null;this.src=&#x27;https://github.com/favicon.ico&#x27;">';
+          // 添加名称首字符作为图标
+          html += '<div class="w-6 h-6 rounded-md overflow-hidden bg-primary/20 dark:bg-primary/30 flex items-center justify-center flex-shrink-0 text-primary dark:text-white font-bold text-xs">';
+          html += firstChar;
           html += '</div>';
           html += '<h3 class="font-bold text-xs sm:text-sm truncate" title="' + item.name + '">' + item.name + '</h3>';
           html += '</div>';
