@@ -139,6 +139,751 @@
 </ol>
 
 <h2 id="57">步骤 5：上传最终版代码并部署</h2>
+### ✅ Workers完整代码（直接复制，无需修改）
+
+```JavaScript
+// Cloudflare Workers + KV 导航页【最终修复版】- 解决模板字符串语法错误
+export default {
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    const path = url.pathname;
+
+    // ===================== 全局配置 =====================
+    const BOOKMARK_PASSWORD = env.BOOKMARK_PASSWORD || 'default123';
+    const MAX_ERROR_COUNT = 3;
+    const LOCK_DURATION = 60;
+
+    // ===================== 工具函数：迁移旧数据 =====================
+    async function migrateOldDataToCategories(env, oldBookmarks) {
+      try {
+        const categoryMap = {};
+        oldBookmarks.forEach(item => {
+          const cat = item.category || item.desc || '未分类';
+          if (!categoryMap[cat]) categoryMap[cat] = [];
+          categoryMap[cat].push({ name: item.name, url: item.url });
+        });
+
+        const categories = Object.keys(categoryMap);
+        for (const cat of categories) {
+          await env.BOOKMARKS_KV.put(`bookmarks:${cat}`, JSON.stringify(categoryMap[cat]));
+        }
+        await env.BOOKMARKS_KV.put('bookmarks:categories', JSON.stringify(categories.sort()));
+        return true;
+      } catch (err) {
+        console.error('迁移旧数据失败：', err);
+        return false;
+      }
+    }
+
+    // ===================== 工具函数：密码验证 =====================
+    async function verifyPassword(env, inputPwd, clientIP) {
+      const lockKey = `password_lock:${clientIP}`;
+      const lockDataStr = await env.BOOKMARKS_KV.get(lockKey);
+      const lockData = lockDataStr ? JSON.parse(lockDataStr) : { count: 0, expire: 0 };
+      
+      if (Date.now() < lockData.expire) {
+        return { success: false, msg: `密码输错次数过多，已锁定 ${LOCK_DURATION} 秒` };
+      }
+
+      if (inputPwd === BOOKMARK_PASSWORD) {
+        await env.BOOKMARKS_KV.put(lockKey, JSON.stringify({ count: 0, expire: 0 }));
+        return { success: true };
+      } else {
+        const newCount = lockData.count + 1;
+        const expire = newCount >= MAX_ERROR_COUNT ? Date.now() + LOCK_DURATION * 1000 : 0;
+        await env.BOOKMARKS_KV.put(lockKey, JSON.stringify({ count: newCount, expire }));
+        
+        const remain = MAX_ERROR_COUNT - newCount;
+        const msg = remain > 0 ? `密码错误，还剩 ${remain} 次机会` : `已锁定 ${LOCK_DURATION} 秒`;
+        return { success: false, msg };
+      }
+    }
+
+    // ===================== API 接口 =====================
+    // 1. 获取分类列表
+    if (path === '/api/get-categories' && request.method === 'GET') {
+      try {
+        const categoriesStr = await env.BOOKMARKS_KV.get('bookmarks:categories');
+        const categories = categoriesStr ? JSON.parse(categoriesStr) : [];
+        return new Response(JSON.stringify(categories), {
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+        });
+      } catch (err) {
+        return new Response(JSON.stringify([]), {
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+        });
+      }
+    }
+
+    // 2. 获取书签
+    if (path === '/api/get-bookmarks' && request.method === 'GET') {
+      const category = url.searchParams.get('category') || '';
+      try {
+        if (category && category !== 'all') {
+          const bookmarksStr = await env.BOOKMARKS_KV.get(`bookmarks:${category}`);
+          const bookmarks = bookmarksStr ? JSON.parse(bookmarksStr) : [];
+          return new Response(JSON.stringify(bookmarks), {
+            headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+          });
+        }
+
+        const categoriesStr = await env.BOOKMARKS_KV.get('bookmarks:categories');
+        let categories = categoriesStr ? JSON.parse(categoriesStr) : [];
+        
+        if (categories.length === 0) {
+          const oldBookmarksStr = await env.BOOKMARKS_KV.get('bookmarks');
+          if (oldBookmarksStr) {
+            await migrateOldDataToCategories(env, JSON.parse(oldBookmarksStr));
+            const newCategoriesStr = await env.BOOKMARKS_KV.get('bookmarks:categories');
+            categories = newCategoriesStr ? JSON.parse(newCategoriesStr) : [];
+          }
+        }
+
+        const bookmarkPromises = categories.map(cat => 
+          env.BOOKMARKS_KV.get(`bookmarks:${cat}`).then(str => str ? JSON.parse(str) : [])
+        );
+        const categoryBookmarks = await Promise.all(bookmarkPromises);
+        
+        const allBookmarks = [];
+        categories.forEach((cat, index) => {
+          allBookmarks.push(...categoryBookmarks[index].map(item => ({ ...item, category: cat })));
+        });
+
+        return new Response(JSON.stringify(allBookmarks), {
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+        });
+      } catch (err) {
+        return new Response(JSON.stringify([]), {
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+        });
+      }
+    }
+
+    // 3. 保存书签
+    if (path === '/api/save-bookmark' && request.method === 'POST') {
+      try {
+        const data = await request.json();
+        const { name, url, category, password, isEditing } = data;
+        const cat = category || '未分类';
+
+        if (isEditing) {
+          const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown';
+          const verifyResult = await verifyPassword(env, password, clientIP);
+          if (!verifyResult.success) {
+            return new Response(JSON.stringify({ success: false, msg: verifyResult.msg }), {
+              status: 403, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+            });
+          }
+        }
+
+        const bookmarksStr = await env.BOOKMARKS_KV.get(`bookmarks:${cat}`);
+        const bookmarks = bookmarksStr ? JSON.parse(bookmarksStr) : [];
+
+        const existIndex = bookmarks.findIndex(item => item.name === name && item.url === url);
+        if (existIndex > -1) {
+          bookmarks[existIndex] = { name, url };
+        } else {
+          bookmarks.unshift({ name, url });
+        }
+
+        await env.BOOKMARKS_KV.put(`bookmarks:${cat}`, JSON.stringify(bookmarks));
+
+        const categoriesStr = await env.BOOKMARKS_KV.get('bookmarks:categories');
+        let categories = categoriesStr ? JSON.parse(categoriesStr) : [];
+        if (!categories.includes(cat)) {
+          categories.push(cat);
+          categories = [...new Set(categories)].sort();
+          await env.BOOKMARKS_KV.put('bookmarks:categories', JSON.stringify(categories));
+        }
+
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ success: false, msg: err.message }), { 
+          status: 400, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+        });
+      }
+    }
+
+    // 4. 删除书签
+    if (path === '/api/delete-bookmark' && request.method === 'POST') {
+      try {
+        const data = await request.json();
+        const { name, url, category, password } = data;
+        const cat = category || '未分类';
+
+        const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown';
+        const verifyResult = await verifyPassword(env, password, clientIP);
+        if (!verifyResult.success) {
+          return new Response(JSON.stringify({ success: false, msg: verifyResult.msg }), {
+            status: 403, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+          });
+        }
+
+        const bookmarksStr = await env.BOOKMARKS_KV.get(`bookmarks:${cat}`);
+        const bookmarks = bookmarksStr ? JSON.parse(bookmarksStr) : [];
+
+        const newBookmarks = bookmarks.filter(item => !(item.name === name && item.url === url));
+        await env.BOOKMARKS_KV.put(`bookmarks:${cat}`, JSON.stringify(newBookmarks));
+
+        if (newBookmarks.length === 0) {
+          const categoriesStr = await env.BOOKMARKS_KV.get('bookmarks:categories');
+          let categories = categoriesStr ? JSON.parse(categoriesStr) : [];
+          categories = categories.filter(c => c !== cat);
+          await env.BOOKMARKS_KV.put('bookmarks:categories', JSON.stringify(categories));
+        }
+
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ success: false, msg: err.message }), { 
+          status: 400, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+        });
+      }
+    }
+
+    // ===================== 前端页面（封装为独立变量，避免模板字符串断裂）=====================
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>我的专属网址导航</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#165DFF',
+            secondary: '#36CFC9',
+          },
+          fontFamily: {
+            sans: ['PingFang SC', 'Microsoft YaHei', 'sans-serif']
+          },
+          translate: {
+            'custom-4px': '-4px',
+          },
+          boxShadow: {
+            'custom-hover': '0 12px 20px -8px rgba(22,93,255,0.2)',
+            'custom-sm': '0 6px 12px -4px rgba(22, 93, 255, 0.15)',
+          }
+        }
+      }
+    }
+  </script>
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .glass { backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.4); border-radius: 16px; }
+      .glass-dark { backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; }
+      .modal-glass { backdrop-filter: blur(20px); border: 1px solid rgba(22, 93, 255, 0.15); border-radius: 16px; background: rgba(255, 255, 255, 0.95); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08); }
+      .dark .modal-glass { background: rgba(17, 24, 39, 0.95); border: 1px solid rgba(255, 255, 255, 0.1); }
+      .category-dropdown { max-height: 180px; overflow-y: auto; z-index: 100; }
+      .category-dropdown-item { transition: all 0.15s ease; }
+      .category-dropdown-item:hover { background-color: rgba(22, 93, 255, 0.1); color: #165DFF; }
+      .dark .category-dropdown-item:hover { background-color: rgba(22, 93, 255, 0.2); }
+      .card-hover { transition: all 0.25s ease; }
+      .card-hover:hover { @apply md:translate-y-custom-4px md:shadow-custom-hover; box-shadow: 0 6px 12px -4px rgba(22, 93, 255, 0.15); }
+      .category-tag { transition: all 0.2s ease; }
+      .category-tag.active { background: #165DFF; color: white; }
+      .no-tap { -webkit-tap-highlight-color: transparent; }
+    }
+  </style>
+  <style>
+    * { box-sizing: border-box; }
+    body { touch-action: manipulation; }
+    ::-webkit-scrollbar { height: 4px; width: 4px; }
+    ::-webkit-scrollbar-thumb { background: #165DFF33; border-radius: 2px; }
+    .overflow-x-auto { scrollbar-width: thin; -ms-overflow-style: none; }
+  </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-blue-50 via-slate-50 to-indigo-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 text-slate-800 dark:text-white bg-fixed">
+  <header class="glass dark:glass-dark sticky top-0 z-50 px-3 py-2.5 mb-4 shadow-sm no-tap">
+    <div class="max-w-7xl mx-auto flex justify-between items-center">
+      <h1 class="text-[clamp(1.1rem,3vw,1.6rem)] font-bold text-primary flex items-center gap-2">
+        <i class="fa fa-link text-lg"></i> 我的专属网址导航
+      </h1>
+      <button id="addBtn" class="bg-primary text-white px-3.5 py-1.5 rounded-full flex items-center gap-1.5 shadow-lg hover:opacity-90 transition-all text-sm">
+        <i class="fa fa-plus text-sm"></i> 添加
+      </button>
+    </div>
+  </header>
+
+  <div class="max-w-7xl mx-auto px-3 mb-5 overflow-x-auto pb-2">
+    <div id="categoryFilter" class="flex gap-2 whitespace-nowrap w-max">
+      <button class="category-tag active px-3 py-2 rounded-full glass dark:glass-dark hover:bg-primary/10 no-tap text-sm min-w-[70px] text-center" data-category="all">
+        全部
+      </button>
+    </div>
+  </div>
+
+  <main class="max-w-7xl mx-auto px-3 mb-10">
+    <div id="bookmarkList" class="space-y-5">
+      <div class="flex items-center justify-center h-36 text-gray-500 dark:text-gray-400">
+        <i class="fa fa-spinner fa-spin mr-3 text-xl"></i> 加载常用网址中...
+      </div>
+    </div>
+  </main>
+
+  <div id="modal" class="fixed inset-0 bg-black/40 flex items-center justify-center z-99 hidden backdrop-blur-sm no-tap">
+    <div class="modal-glass w-[94%] max-w-md p-5 shadow-2xl">
+      <div class="flex justify-between items-center mb-4">
+        <h2 id="modalTitle" class="text-lg font-bold text-primary">添加新网址</h2>
+        <button id="closeBtn" class="text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary text-lg transition-colors no-tap">
+          <i class="fa fa-times"></i>
+        </button>
+      </div>
+      <form id="bookmarkForm" class="space-y-4">
+        <input type="hidden" id="editCategory">
+        <input type="hidden" id="isEditing" value="false">
+        <div>
+          <label class="block text-sm font-medium mb-1.5 text-gray-700 dark:text-gray-200">网站名称</label>
+          <input type="text" id="name" required class="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-white/95 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-primary/60 focus:border-primary text-gray-800 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 text-base" placeholder="例如：百度、GitHub">
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1.5 text-gray-700 dark:text-gray-200">网站地址</label>
+          <input type="url" id="url" required class="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-white/95 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-primary/60 focus:border-primary text-gray-800 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 text-base" placeholder="https://www.baidu.com">
+          <p class="text-xs text-gray-600 dark:text-gray-300 mt-1">✅ 无需加载图标，页面更流畅</p>
+        </div>
+        <div class="relative">
+          <label class="block text-sm font-medium mb-1.5 text-gray-700 dark:text-gray-200">分类（必填）</label>
+          <input type="text" id="category" required class="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-white/95 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-primary/60 focus:border-primary text-gray-800 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 text-base" placeholder="例如：工具类、影音类、编程类">
+          <div id="categoryDropdown" class="category-dropdown absolute left-0 right-0 mt-1 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-slate-800 hidden">
+            <div id="categoryDropdownItems" class="p-2 space-y-1"></div>
+          </div>
+          <p class="text-xs text-gray-600 dark:text-gray-300 mt-1">💡 可直接选择已有分类，或输入新分类</p>
+        </div>
+        <div id="passwordContainer" class="hidden">
+          <label class="block text-sm font-medium mb-1.5 text-gray-700 dark:text-gray-200">操作密码</label>
+          <input type="password" id="password" required class="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-white/95 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-primary/60 focus:border-primary text-gray-800 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 text-base" placeholder="请输入操作密码">
+        </div>
+        <button type="submit" class="w-full bg-primary text-white py-3 rounded-lg shadow-md hover:opacity-90 transition-all mt-2 text-base no-tap">保存网址</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="deleteModal" class="fixed inset-0 bg-black/40 flex items-center justify-center z-100 hidden backdrop-blur-sm no-tap">
+    <div class="modal-glass w-[94%] max-w-md p-5 shadow-2xl">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-lg font-bold text-primary">删除确认</h2>
+        <button id="closeDeleteBtn" class="text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary text-lg transition-colors no-tap">
+          <i class="fa fa-times"></i>
+        </button>
+      </div>
+      <div class="space-y-4">
+        <p class="text-sm text-gray-600 dark:text-gray-300">删除操作需要验证密码，删除后无法恢复！</p>
+        <div>
+          <label class="block text-sm font-medium mb-1.5 text-gray-700 dark:text-gray-200">操作密码</label>
+          <input type="password" id="deletePassword" required class="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-white/95 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-primary/60 focus:border-primary text-gray-800 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 text-base" placeholder="请输入操作密码">
+        </div>
+        <input type="hidden" id="deleteName">
+        <input type="hidden" id="deleteUrl">
+        <input type="hidden" id="deleteCategory">
+        <button id="confirmDeleteBtn" class="w-full bg-red-500 text-white py-3 rounded-lg shadow-md hover:opacity-90 transition-all mt-2 text-base no-tap">确认删除</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let bookmarks = [];
+    let allCategories = [];
+    let filteredCategory = 'all';
+
+    const cardColorPool = [
+      'rgba(255,107,104,0.3)',
+      'rgba(34,107,104,0.3)',
+      'rgba(69,67,129,0.3)',
+      'rgba(69,187,129,0.3)',
+      'rgba(250,220,129,0.3)',
+      'rgba(243,220,229,0.3)',
+    ];
+    const darkCardColorPool = [
+      'rgba(45,35,35,0.3)',
+      'rgba(35,45,35,0.3)',
+      'rgba(35,35,45,0.3)',
+      'rgba(45,40,35,0.3)',
+      'rgba(40,35,45,0.3)',
+      'rgba(35,45,45,0.3)',
+    ];
+
+    const bookmarkList = document.getElementById('bookmarkList');
+    const categoryFilter = document.getElementById('categoryFilter');
+    const addBtn = document.getElementById('addBtn');
+    const closeBtn = document.getElementById('closeBtn');
+    const modal = document.getElementById('modal');
+    const modalTitle = document.getElementById('modalTitle');
+    const bookmarkForm = document.getElementById('bookmarkForm');
+    const nameInput = document.getElementById('name');
+    const urlInput = document.getElementById('url');
+    const categoryInput = document.getElementById('category');
+    const editCategoryInput = document.getElementById('editCategory');
+    const isEditingInput = document.getElementById('isEditing');
+    const passwordContainer = document.getElementById('passwordContainer');
+    const passwordInput = document.getElementById('password');
+    const categoryDropdown = document.getElementById('categoryDropdown');
+    const categoryDropdownItems = document.getElementById('categoryDropdownItems');
+    
+    const deleteModal = document.getElementById('deleteModal');
+    const closeDeleteBtn = document.getElementById('closeDeleteBtn');
+    const deletePasswordInput = document.getElementById('deletePassword');
+    const deleteNameInput = document.getElementById('deleteName');
+    const deleteUrlInput = document.getElementById('deleteUrl');
+    const deleteCategoryInput = document.getElementById('deleteCategory');
+    const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+
+    function getRandomCardBg() {
+      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const pool = isDark ? darkCardColorPool : cardColorPool;
+      return pool[Math.floor(Math.random() * pool.length)];
+    }
+
+    async function getCategories() {
+      try {
+        const res = await fetch('/api/get-categories');
+        allCategories = await res.json();
+        return allCategories;
+      } catch (err) {
+        const backup = localStorage.getItem('bookmarks_categories');
+        allCategories = backup ? JSON.parse(backup) : [];
+        return allCategories;
+      }
+    }
+
+    async function getBookmarks(category = 'all') {
+      try {
+        const url = category === 'all' 
+          ? '/api/get-bookmarks' 
+          : \`/api/get-bookmarks?category=\${encodeURIComponent(category)}\`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (category === 'all') {
+          bookmarks = data;
+          localStorage.setItem('bookmarks_all', JSON.stringify(data));
+        }
+        return data;
+      } catch (err) {
+        const backup = localStorage.getItem('bookmarks_all');
+        bookmarks = backup ? JSON.parse(backup) : [];
+        return category === 'all' ? bookmarks : bookmarks.filter(item => item.category === category);
+      }
+    }
+
+    async function saveBookmark(data) {
+      try {
+        const res = await fetch('/api/save-bookmark', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        const result = await res.json();
+        if (!result.success) {
+          alert(result.msg);
+          return false;
+        }
+        await refreshBookmarks();
+        return true;
+      } catch (err) {
+        alert('操作失败：' + err.message);
+        return false;
+      }
+    }
+
+    async function deleteBookmark(name, url, category, password) {
+      try {
+        const res = await fetch('/api/delete-bookmark', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, url, category, password })
+        });
+        const result = await res.json();
+        if (!result.success) {
+          alert(result.msg);
+          return false;
+        }
+        await refreshBookmarks();
+        return true;
+      } catch (err) {
+        alert('操作失败：' + err.message);
+        return false;
+      }
+    }
+
+    async function refreshBookmarks() {
+      await getCategories();
+      await getBookmarks('all');
+      renderCategoryFilter();
+      renderBookmarks();
+    }
+
+    function renderCategoryDropdown() {
+      const inputVal = categoryInput.value.trim().toLowerCase();
+      const matchedCategories = allCategories.filter(cat => 
+        cat.toLowerCase().includes(inputVal)
+      );
+
+      if (matchedCategories.length === 0) {
+        categoryDropdown.classList.add('hidden');
+        return;
+      }
+
+      categoryDropdownItems.innerHTML = '';
+      matchedCategories.forEach(cat => {
+        const item = document.createElement('div');
+        item.className = 'category-dropdown-item px-3 py-2 rounded-md cursor-pointer text-gray-800 dark:text-gray-200 no-tap';
+        item.textContent = cat;
+        item.addEventListener('click', () => {
+          categoryInput.value = cat;
+          categoryDropdown.classList.add('hidden');
+        });
+        categoryDropdownItems.appendChild(item);
+      });
+
+      categoryDropdown.classList.remove('hidden');
+    }
+
+    function renderCategoryFilter() {
+      const allBtn = categoryFilter.querySelector('[data-category="all"]');
+      categoryFilter.innerHTML = '';
+      categoryFilter.appendChild(allBtn);
+
+      allCategories.forEach(cat => {
+        const btn = document.createElement('button');
+        btn.className = 'category-tag px-3 py-2 rounded-full glass dark:glass-dark hover:bg-primary/10 no-tap text-sm min-w-[70px] text-center';
+        btn.dataset.category = cat;
+        btn.textContent = cat;
+        btn.addEventListener('click', async () => {
+          document.querySelectorAll('.category-tag').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          filteredCategory = cat;
+          const catBookmarks = await getBookmarks(cat);
+          renderBookmarks(catBookmarks);
+        });
+        categoryFilter.appendChild(btn);
+      });
+
+      allBtn.addEventListener('click', async () => {
+        document.querySelectorAll('.category-tag').forEach(b => b.classList.remove('active'));
+        allBtn.classList.add('active');
+        filteredCategory = 'all';
+        await getBookmarks('all');
+        renderBookmarks();
+      });
+    }
+
+    function renderBookmarks(customBookmarks = null) {
+      const renderData = customBookmarks || bookmarks;
+
+      if (renderData.length === 0) {
+        bookmarkList.innerHTML = \`
+          <div class="glass dark:glass-dark p-6 text-center">
+            <i class="fa fa-star-o text-4xl text-primary mb-3 opacity-80"></i>
+            <p class="text-base text-gray-600 dark:text-gray-300">\${filteredCategory === 'all' ? '暂无收藏的网址' : \`「\${filteredCategory}」分类下暂无网址\`}</p>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">点击右上角「添加」，开始收藏你的常用网站吧 ✨</p>
+          </div>
+        \`;
+        return;
+      }
+
+      const groupedBookmarks = {};
+      if (filteredCategory === 'all') {
+        renderData.forEach(item => {
+          const cat = item.category || '未分类';
+          if (!groupedBookmarks[cat]) groupedBookmarks[cat] = [];
+          groupedBookmarks[cat].push(item);
+        });
+      } else {
+        groupedBookmarks[filteredCategory] = renderData;
+      }
+
+      let html = '';
+      Object.keys(groupedBookmarks).forEach(cat => {
+        const items = groupedBookmarks[cat];
+        html += \`
+          <div class="category-group">
+            <h2 class="text-lg font-bold mb-3 flex items-center gap-2">
+              <i class="fa fa-folder text-primary"></i> \${cat}（\${items.length}个）
+            </h2>
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+        \`;
+
+        items.forEach(item => {
+          const cardBg = getRandomCardBg();
+          const itemId = \`bookmark-\${item.name.replace(/\\W/g, '')}-\${item.url.replace(/\\W/g, '')}\`;
+          html += \`
+            <div class="glass dark:glass-dark p-3 card-hover flex flex-col h-full" style="background: \${cardBg}" data-id="\${itemId}">
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex-1">
+                  <h3 class="font-bold text-xs sm:text-sm truncate" title="\${item.name}">\${item.name}</h3>
+                </div>
+                <div class="flex gap-1.5">
+                  <button class="edit-btn text-secondary hover:text-primary p-1 rounded no-tap" title="编辑" data-name="\${item.name}" data-url="\${item.url}" data-category="\${item.category}">
+                    <i class="fa fa-pencil text-xs"></i>
+                  </button>
+                  <button class="delete-btn text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-300 p-1 rounded no-tap" title="删除" data-name="\${item.name}" data-url="\${item.url}" data-category="\${item.category}">
+                    <i class="fa fa-trash text-xs"></i>
+                  </button>
+                </div>
+              </div>
+              <a href="\${item.url}" target="_blank" rel="noopener noreferrer" class="text-[10px] sm:text-xs text-gray-600 dark:text-gray-300 break-all hover:text-primary transition-colors mb-2 flex-1">
+                \${item.url}
+              </a>
+              <p class="text-[9px] sm:text-xs text-gray-500 dark:text-gray-400 mt-1 bg-gray-100/60 dark:bg-slate-700/50 px-1.5 py-0.5 rounded-md">\${cat}</p>
+            </div>
+          \`;
+        });
+
+        html += '</div></div>';
+      });
+
+      bookmarkList.innerHTML = html;
+      
+      bookmarkList.addEventListener('click', (e) => {
+        const editBtn = e.target.closest('.edit-btn');
+        const deleteBtn = e.target.closest('.delete-btn');
+        
+        if (editBtn) {
+          const name = editBtn.dataset.name;
+          const url = editBtn.dataset.url;
+          const category = editBtn.dataset.category;
+          editBookmark(name, url, category);
+        }
+        
+        if (deleteBtn) {
+          const name = deleteBtn.dataset.name;
+          const url = deleteBtn.dataset.url;
+          const category = deleteBtn.dataset.category;
+          showDeleteModal(name, url, category);
+        }
+      });
+    }
+
+    function addBookmark() {
+      modalTitle.textContent = '添加新网址';
+      bookmarkForm.reset();
+      editCategoryInput.value = '';
+      isEditingInput.value = 'false';
+      passwordContainer.classList.add('hidden');
+      modal.classList.remove('hidden');
+      nameInput.focus();
+      renderCategoryDropdown();
+    }
+
+    function editBookmark(name, url, category) {
+      modalTitle.textContent = '编辑网址';
+      nameInput.value = name;
+      urlInput.value = url;
+      categoryInput.value = category;
+      editCategoryInput.value = category;
+      isEditingInput.value = 'true';
+      passwordContainer.classList.remove('hidden');
+      passwordInput.value = '';
+      modal.classList.remove('hidden');
+      nameInput.focus();
+      renderCategoryDropdown();
+    }
+
+    function showDeleteModal(name, url, category) {
+      deleteNameInput.value = name;
+      deleteUrlInput.value = url;
+      deleteCategoryInput.value = category;
+      deletePasswordInput.value = '';
+      deleteModal.classList.remove('hidden');
+      deletePasswordInput.focus();
+    }
+
+    confirmDeleteBtn.addEventListener('click', async () => {
+      const name = deleteNameInput.value;
+      const url = deleteUrlInput.value;
+      const category = deleteCategoryInput.value;
+      const password = deletePasswordInput.value.trim();
+
+      if (!password) {
+        alert('请输入操作密码！');
+        return;
+      }
+
+      const success = await deleteBookmark(name, url, category, password);
+      if (success) {
+        deleteModal.classList.add('hidden');
+        renderCategoryFilter();
+        renderBookmarks();
+      }
+    });
+
+    bookmarkForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = nameInput.value.trim();
+      const url = urlInput.value.trim();
+      const newCategory = categoryInput.value.trim() || '未分类';
+      const oldCategory = editCategoryInput.value || newCategory;
+      const isEditing = isEditingInput.value === 'true';
+      const password = isEditing ? passwordInput.value.trim() : '';
+
+      if (isEditing && !password) {
+        alert('请输入操作密码！');
+        return;
+      }
+
+      let success = true;
+      if (isEditing && oldCategory !== newCategory) {
+        success = await deleteBookmark(name, url, oldCategory, password);
+        if (!success) return;
+      }
+
+      success = await saveBookmark({ 
+        name, url, category: newCategory, 
+        password: isEditing ? password : '', 
+        isEditing 
+      });
+      if (success) {
+        modal.classList.add('hidden');
+        renderCategoryFilter();
+        renderBookmarks();
+      }
+    });
+
+    async function initPage() {
+      await getCategories();
+      await getBookmarks('all');
+      renderCategoryFilter();
+      renderBookmarks();
+      localStorage.setItem('bookmarks_categories', JSON.stringify(allCategories));
+    }
+
+    categoryInput.addEventListener('input', renderCategoryDropdown);
+    categoryInput.addEventListener('focus', renderCategoryDropdown);
+    document.addEventListener('click', (e) => {
+      if (!categoryInput.contains(e.target) && !categoryDropdown.contains(e.target)) {
+        categoryDropdown.classList.add('hidden');
+      }
+    });
+    addBtn.addEventListener('click', addBookmark);
+    closeBtn.addEventListener('click', () => modal.classList.add('hidden'));
+    modal.addEventListener('click', (e) => e.target === modal && modal.classList.add('hidden'));
+    closeDeleteBtn.addEventListener('click', () => deleteModal.classList.add('hidden'));
+    deleteModal.addEventListener('click', (e) => e.target === deleteModal && deleteModal.classList.add('hidden'));
+
+    window.addEventListener('DOMContentLoaded', initPage);
+  </script>
+</body>
+</html>`;
+
+    // 返回 HTML 响应（核心修复：使用独立变量，避免模板字符串断裂）
+    return new Response(htmlContent, {
+      headers: { 'Content-Type': 'text/html; charset=utf-8' }
+    });
+  }
+};
+
+```
+
+---
+
 
 <ol id="58">
 
