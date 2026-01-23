@@ -1,80 +1,197 @@
-# 分类式网址导航 - Cloudflare Worker 版
-一款基于 Cloudflare Worker + KV 构建的轻量级、高性能分类式网址导航工具，支持分类分组、随机配色、数据持久化，无冗余资源加载，流畅度拉满。
+# Cloudflare Workers + KV 导航页
 
+一个基于 Cloudflare Workers 和 KV 存储的现代化、响应式导航页，支持书签管理、分类管理、暗黑模式和网站图标自动获取。
 
+## ✨ 功能特性
 
-## ✨ 核心特性
-- 📁 **分类管理**：支持自定义分类、分类筛选、按分类分组显示，网址再多也不杂乱
-- ⚡ **极致流畅**：移除ICO图标加载逻辑，减少网络请求，页面加载/渲染无卡顿
-- 🎨 **随机配色**：卡片随机柔和配色，与背景区分明显，视觉体验佳
-- 💾 **数据持久化**：基于 Cloudflare KV 存储，本地备份兜底，数据不丢失
-- 📱 **响应式设计**：适配PC/移动端，分类栏支持横向滚动，移动端体验友好
-- ✏️ **便捷操作**：支持网址的添加、编辑、删除，操作简单直观
-- 🌙 **深色模式**：自动适配系统深色/浅色模式，配色同步调整
+- 📌 **书签管理**：添加、编辑、删除书签，支持分类管理
+- 🔒 **密码保护**：所有书签操作都需要密码验证
+- 🌓 **暗黑模式**：支持自动切换和手动切换，保存用户偏好
+- 🎨 **现代化设计**：采用玻璃态设计，带有紫色发光效果
+- 🖼️ **网站图标**：自动获取网站 favicon，支持缓存
+- 📱 **响应式布局**：适配桌面端、平板和移动端
+- ⚡ **高性能**：基于 Cloudflare Workers，全球边缘部署
+- 📦 **KV 存储**：使用 Cloudflare KV 存储书签数据
 
+## 🛠️ 技术栈
 
-## 🚀 部署教程
-### 前置条件
-- 拥有 Cloudflare 账号
-- 已创建 Cloudflare Worker 服务
-- 已创建 KV 命名空间
+- **前端框架**：原生 HTML/CSS/JavaScript
+- **样式**：Tailwind CSS + 自定义 CSS
+- **部署**：Cloudflare Workers
+- **存储**：Cloudflare KV
+- **图标**：Font Awesome 4.7.0
 
+## 🚀 部署说明
 
-### 部署步骤
-1. **创建 KV 命名空间**
-   - 进入 Cloudflare 控制台 → Workers & Pages → KV → 创建命名空间（例如：`bookmarks-kv`）
-   - 绑定 KV 命名空间到 Worker：进入 Worker 服务 → 设置 → 变量 → KV 命名空间绑定 → 添加绑定（变量名：`BOOKMARKS_KV`，选择创建的命名空间）
+### 1. 准备工作
 
-2. **部署代码**
-   - 进入 Worker 服务 → Quick Edit
-   - 清空编辑器内默认代码，粘贴本项目完整代码
-   - 点击「Save and deploy」完成部署
+- 注册 Cloudflare 账号
+- 安装 Wrangler CLI：`npm install -g wrangler`
+- 登录 Wrangler：`wrangler login`
 
-3. **访问使用**
-   - 访问 Worker 分配的域名（例如：`xxx.xxx.workers.dev`）即可使用
+### 2. 创建项目
 
+```bash
+# 克隆或复制本项目代码
+mkdir my-nav && cd my-nav
+# 初始化 Wrangler 项目
+wrangler init
+```
 
-## 📖 使用指南
-### 基础操作
-1. **添加网址**
-   - 点击右上角「添加网址」按钮
-   - 填写网站名称、网址、分类（分类为必填项，例如：工具类、影音类、编程类）
-   - 点击「保存网址」，自动按分类分组显示
+### 3. 配置 KV 命名空间
 
-2. **筛选分类**
-   - 顶部分类筛选栏点击对应分类标签（如：工具类），仅显示该分类下的网址
-   - 点击「全部」可查看所有分类的网址
+```bash
+# 创建 KV 命名空间
+wrangler kv:namespace create BOOKMARKS_KV
+# 开发环境 KV 命名空间
+wrangler kv:namespace create BOOKMARKS_KV --preview
+```
 
-3. **编辑/删除网址**
-   - 每个网址卡片右上角提供「编辑」「删除」按钮
-   - 编辑：修改名称、网址、分类，保存后自动更新
-   - 删除：确认后删除该网址，数据即时同步
+### 4. 修改配置文件
 
+创建 `wrangler.toml` 文件，内容如下：
 
-### 数据管理
-- 数据自动存储到 Cloudflare KV，同时本地 localStorage 备份
-- 即使 KV 同步失败，本地数据也不会丢失，重新联网后自动同步
+```toml
+name = "my-nav"
+main = "worker.js"
+compatibility_date = "2025-11-25"
 
+[[kv_namespaces]]
+binding = "BOOKMARKS_KV"
+id = "<YOUR_KV_NAMESPACE_ID>"
+preview_id = "<YOUR_PREVIEW_KV_NAMESPACE_ID>"
 
-## 🎨 自定义配置
-### 调整卡片配色
-修改代码中 `cardColorPool`（浅色模式）和 `darkCardColorPool`（深色模式）数组，自定义卡片随机配色：
-```javascript
-// 浅色模式配色池（rgba格式，最后一位为透明度）
-const cardColorPool = [
-  'rgba(255,243,243,0.4)',  // 浅红
-  'rgba(243,255,243,0.4)',  // 浅绿
-  'rgba(243,243,255,0.4)',  // 浅蓝
-  'rgba(255,251,243,0.4)',  // 浅橙
-  'rgba(250,243,255,0.4)',  // 浅紫
-  'rgba(243,255,251,0.4)',  // 浅青
-];
-// 深色模式配色池
-const darkCardColorPool = [
-  'rgba(45,35,35,0.4)',
-  'rgba(35,45,35,0.4)',
-  'rgba(35,35,45,0.4)',
-  'rgba(45,40,35,0.4)',
-  'rgba(40,35,45,0.4)',
-  'rgba(35,45,45,0.4)',
-];
+[vars]
+BOOKMARK_PASSWORD = "your_password_here"
+```
+
+### 5. 部署项目
+
+```bash
+# 本地开发
+wrangler dev
+
+# 部署到生产环境
+wrangler deploy
+```
+
+## ⚙️ 配置说明
+
+### 环境变量
+
+- `BOOKMARK_PASSWORD`：书签操作密码
+- `BOOKMARKS_KV`：KV 存储命名空间绑定
+
+### 自定义主题
+
+可以修改代码中的以下变量来调整主题：
+
+- `cardColorPool`：浅色模式卡片颜色
+- `darkCardColorPool`：深色模式卡片颜色
+- `primary`：主题主色
+- `secondary`：主题次要色
+
+## 📖 使用说明
+
+### 添加书签
+
+1. 点击右上角的「添加」按钮
+2. 填写网站名称、网址和分类
+3. 输入操作密码
+4. 点击「保存网址」按钮
+
+### 编辑书签
+
+1. 点击书签卡片上的编辑图标
+2. 修改相关信息
+3. 输入操作密码
+4. 点击「保存网址」按钮
+
+### 删除书签
+
+1. 点击书签卡片上的删除图标
+2. 输入操作密码
+3. 点击「确认删除」按钮
+
+### 切换暗黑模式
+
+点击右上角的月亮/太阳图标切换主题。
+
+### 分类筛选
+
+点击顶部的分类标签可以筛选书签。
+
+## 🏗️ 本地开发
+
+### 安装依赖
+
+```bash
+npm install
+```
+
+### 启动开发服务器
+
+```bash
+wrangler dev
+```
+
+访问 `http://127.0.0.1:8787` 查看效果。
+
+### 测试 API
+
+```bash
+# 获取分类
+curl http://127.0.0.1:8787/api/get-categories
+
+# 获取书签
+curl http://127.0.0.1:8787/api/get-bookmarks
+
+# 添加书签
+curl -X POST -H "Content-Type: application/json" -d '{"name":"百度","url":"https://www.baidu.com","category":"搜索引擎","password":"your_password"}' http://127.0.0.1:8787/api/save-bookmark
+```
+
+## 📁 项目结构
+
+```
+.
+├── worker.js          # 主代码文件
+├── wrangler.toml      # Wrangler 配置文件
+└── README.md          # 项目说明文档
+```
+
+## 🎨 设计特点
+
+### 玻璃态设计
+
+采用了现代化的玻璃态设计，带有模糊效果和半透明背景，创造出层次感。
+
+### 紫色发光效果
+
+在卡片、按钮和边框上使用了紫色发光效果，增强视觉吸引力。
+
+### 响应式布局
+
+使用 Tailwind CSS 的响应式工具类，确保在不同设备上都有良好的显示效果。
+
+## 📝 注意事项
+
+1. 本地开发环境中，由于没有配置 KV 存储，所以会显示空的书签列表
+2. 部署到 Cloudflare Workers 后，需要配置 KV 命名空间才能正常使用
+3. 密码保护功能仅用于验证操作权限，不提供数据加密
+4. 网站图标获取可能会受到 CORS 限制
+
+## 📄 许可证
+
+MIT License
+
+## 🤝 贡献
+
+欢迎提交 Issue 和 Pull Request！
+
+## 📞 联系方式
+
+如有问题或建议，欢迎通过 GitHub Issues 反馈。
+
+---
+
+**Enjoy using Cloudflare Workers + KV 导航页！** 🎉
